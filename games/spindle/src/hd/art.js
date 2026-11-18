@@ -7,9 +7,15 @@ export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 // ---------- colour ----------
 const cache = new Map();
-export function rgb(hex) {
-  let c = cache.get(hex);
-  if (!c) { const n = parseInt(hex.slice(1), 16); c = [(n >> 16) & 255, (n >> 8) & 255, n & 255]; cache.set(hex, c); }
+// '#rrggbb', or the 'rgba(r,g,b,a)' that mix() returns, so mixes can be mixed again
+// (crumbling and blinking ledges are): parsing that as hex gave NaN, which drew them black
+export function rgb(col) {
+  let c = cache.get(col);
+  if (!c) {
+    if (col[0] === '#') { const n = parseInt(col.slice(1), 16); c = [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+    else c = col.slice(col.indexOf('(') + 1).split(',', 3).map(Number);
+    cache.set(col, c);
+  }
   return c;
 }
 export const mixc = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
