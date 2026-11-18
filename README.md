@@ -11,22 +11,22 @@ no external assets. `dist/index.html` is the launcher, a DOS-style menu with liv
 | ---------------- | -------- | ---------------------- | ---------------------------------------------------------- |
 | `games/skyhook`  | Skyhook  | Striker (1985)         | `dist/skyhook-cga.html` (CGA), `dist/skyhook-hd.html` (HD) |
 | `games/dropzone` | Dropzone | Airborne Ranger (1988) | `dist/dropzone.html`                                       |
-| `games/triform`  | Triform  | Metal Mutant (1991)    | `dist/triform.html` (VGA)                                  |
+| `games/triform`  | Triform  | Metal Mutant (1991)    | `dist/triform-vga.html` (VGA), `dist/triform-hd.html` (HD) |
 
 ## Play
 
 Open `dist/index.html` in a desktop or mobile browser (or any game's file directly).
 
-| Key            | Action                  |
-| -------------- | ----------------------- |
-| `↑` `↓`, `1–9` | Select a game           |
-| `←` `→`        | Switch version (CGA/HD) |
-| `Enter`        | Run                     |
-| `F1`           | Help                    |
-| `F2` / `M`     | Sound on/off            |
-| `F3` / `C`     | Scanlines on/off        |
-| `F4` / `F`     | Full screen on/off      |
-| `F10` / `Q`    | Exit to DOS             |
+| Key            | Action             |
+| -------------- | ------------------ |
+| `↑` `↓`, `1–9` | Select a game      |
+| `←` `→`        | Switch version     |
+| `Enter`        | Run                |
+| `F1`           | Help               |
+| `F2` / `M`     | Sound on/off       |
+| `F3` / `C`     | Scanlines on/off   |
+| `F4` / `F`     | Full screen on/off |
+| `F10` / `Q`    | Exit to DOS        |
 
 Run zooms the game out of its preview. To come back, leave from the game's title screen (Skyhook: `Q` / Select,
 Dropzone: `Esc` / B, Triform: `Q` / `Esc` / B) or press the browser's Back button.

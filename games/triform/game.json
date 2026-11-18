@@ -55,6 +55,13 @@
       "entry": "index.html",
       "tag": "VGA · 320×200 · 256 colours",
       "note": "Hand-dithered 256-colour look, shown at 4:3. Best score and time are saved in the browser."
+    },
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "modern.html",
+      "tag": "HD · 16:9 · vector",
+      "note": "Widescreen remaster: vector art, lighting and glow, the camera easing from room to room."
     }
   ]
 }
