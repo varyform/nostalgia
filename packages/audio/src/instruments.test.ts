@@ -32,6 +32,8 @@ function run(play: (v: Voices, t: number) => void, extra: Partial<SynthOptions<{
 const ids = (log: string[], what: string) =>
   log.filter(l => l.endsWith(`=${what}()`) || l.includes(`=${what}(`)).map(l => l.split('=')[0]);
 const calls = (log: string[], who: string) => log.filter(l => l.startsWith(who + '.'));
+/** A mock node's id as the log writes it. */
+const log0 = (node: unknown) => '#' + (node as { id: number }).id;
 
 describe('sub', () => {
   it('starts punch semitones up, drops to the note and runs through a soft clipper', () => {
@@ -94,6 +96,16 @@ describe('pulse', () => {
     voices.pulse(150, 2, 0.3, 0.1);
     expect(ids(rec.log.slice(from), 'createOscillator')).toHaveLength(2); // the LFO is shared
   });
+
+  it('lets go of the shared LFO when a note ends', () => {
+    const { log } = run((v, t) => v.pulse(100, t, 0.3, 0.1));
+    const [lfo] = ids(log, 'createOscillator');
+    const source = rec.log.findLast(l => l.endsWith('=createConstantSource()'))!.split('=')[0];
+    rec.end(source);
+    const depths = log.filter(l => l.startsWith(`${lfo}.connect(`)).map(l => l.slice(`${lfo}.connect(`.length, -1));
+    expect(depths).toHaveLength(2);
+    for (const d of depths) expect(rec.log).toContain(`${lfo}.disconnect(${d})`);
+  });
 });
 
 describe('fm', () => {
@@ -115,6 +127,18 @@ describe('fm', () => {
     expect(log).toContain(`${mod}.frequency=400`);
     const [mg] = ids(log, 'createGain');
     expect(log).toContain(`${mg}.gain.setValueAtTime(600,1)`);
+  });
+});
+
+describe("a bus of the score's own", () => {
+  it('plays into a node the score made instead of a bus', () => {
+    let send = '';
+    const { log } = run((v, t) => {
+      const node = v.ac!.createGain();
+      send = log0(node);
+      v.supersaw(220, t, 0.2, 0.1, { bus: node });
+    });
+    expect(log.some(l => l.endsWith(`.connect(${send})`))).toBe(true);
   });
 });
 

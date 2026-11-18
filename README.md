@@ -114,7 +114,11 @@ the context on the first user gesture, the music and effects buses, a seeded noi
 `fm`, `notes`) and a look-ahead sequencer. Options give pulse-wave duty cycles, a PC-speaker voicing and a music echo.
 For richer scores there are `sub` (a punchy, clipped sub bass), `supersaw` (seven detuned saws in stereo), `pulse` (PWM
 pulses) and `fm` with an options object (an index envelope), each one note with an ADSR through an enveloped filter
-where it has one: `v.supersaw(midi(60), t, dt * 4, 0.08, { cutoff: 2400 })`.
+where it has one: `v.supersaw(midi(60), t, dt * 4, 0.08, { cutoff: 2400 })`. Effects go between voices and a bus:
+`delay` (a mono echo beside the dry sound), `distortion` (a hard clipper or a wavefolder) and `compressor` (an RMS
+AudioWorklet with a soft knee and `makeup: 'auto'`; the browser's compressor where worklets can't run). A score plays
+voices into them with `v.insert(ac => [distortion(ac), delay(ac)])` passed as the bus, or puts them on a whole bus with
+the synth's `inserts: { music, sfx, master }`: a compressor on `music` evens the tracks out against each other.
 
 ```js
 import { createSynth, line, midi, span } from '@nostalgia/audio';

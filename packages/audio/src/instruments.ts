@@ -7,7 +7,7 @@
 //   v.supersaw(midi(60), t, dt * 4, 0.08, { cutoff: 2400, envmod: 2400 })
 //   v.pulse(midi(67), t, dt * 2, 0.07, { width: 0.3, pwm: 0.6 })
 //   v.fm(midi(72), t, 0.8, 0.1, { ratio: 3.5, index: 4, modDecay: 0.3 })   // a bell
-import type { Bus } from './synth.ts';
+import type { Target } from './synth.ts';
 
 /** The level envelope, seconds and a 0..1 sustain. */
 export interface Adsr {
@@ -17,8 +17,8 @@ export interface Adsr {
   release?: number;
 }
 export interface VoiceOptions extends Adsr {
-  /** Where it plays (default 'music'). */
-  bus?: Bus;
+  /** Where it plays (default 'music'): a bus, an insert (v.insert()) or a node of the score's own. */
+  bus?: Target;
 }
 export interface SubOptions extends VoiceOptions {
   /** Semitones above the note it starts at, dropping to it (default 12). */
@@ -72,7 +72,7 @@ export interface FmOptions extends VoiceOptions {
 /** What the voices need of the synth they play in. */
 export interface Kit {
   ac: AudioContext;
-  out: (bus: Bus) => AudioNode;
+  out: (bus: Target) => AudioNode;
   /** How long a voice runs on after its release, before stop(). */
   tail: number;
 }
@@ -289,6 +289,7 @@ export function pulse(k: Kit, f: number, t: number, dur: number, vol: number, o:
     swing = clamp01(o.pwm ?? 0.5) * (duty - 0.02), // the width's reach either way
     spread = 30 * clamp01(o.detune ?? 0.3),
     lfo = lfoOf(ac, o.rate ?? 0.8, t);
+  const depths: GainNode[] = [];
   const sum = ac.createGain();
   sum.gain.value = 0.25; // two pulses of up to ±2 each
   sum.connect(lp);
@@ -308,13 +309,18 @@ export function pulse(k: Kit, f: number, t: number, dur: number, vol: number, o:
     osc.connect(delay).connect(invert).connect(sum);
     lfo.connect(depth).connect(delay.delayTime);
     parts.push(osc, delay, invert, depth);
+    depths.push(depth);
     return osc;
   });
   for (const osc of oscs) {
     osc.start(t);
     osc.stop(end + k.tail);
   }
-  one.onended = () => parts.forEach(n => n.disconnect());
+  one.onended = () => {
+    parts.forEach(n => n.disconnect());
+    // the shared LFO would otherwise hold on to every note's depth for good
+    for (const d of depths) lfo.disconnect(d);
+  };
 }
 
 /** Two sines, the modulator bending the carrier at audio rate, its index enveloped. */

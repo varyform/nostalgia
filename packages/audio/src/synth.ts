@@ -1,6 +1,7 @@
 // The engine: an AudioContext made on the first user gesture, three gain buses, a noise
 // buffer, the voices (tone, hiss, fm, notes) and a 16th-step look-ahead sequencer. What a
 // game plays (its tracks, the arrangement of one step, its effects) comes from arrange().
+import { chain, type Fx } from './effects.ts';
 import * as inst from './instruments.ts';
 import type { FmOptions, PulseOptions, SubOptions, SupersawOptions } from './instruments.ts';
 import { midi } from './notes.ts';
@@ -8,6 +9,15 @@ import { midi } from './notes.ts';
 /** An oscillator shape, or a pulse duty cycle (0.125, 0.25, 0.5) when the synth has `pulse`. */
 export type Wave = OscillatorType | number;
 export type Bus = 'music' | 'sfx';
+/** Effects a score's voices can play into (v.insert()), feeding a bus or another insert. */
+export interface Insert<F extends Fx = Fx> {
+  /** The effect on the current context: null before unlock(), built on first use. */
+  readonly fx: F | null;
+}
+/** Where a voice plays: a bus, an insert, or a node of the score's own. */
+export type Target = Bus | Insert | AudioNode;
+/** Makes an insert's effects on a context: one, or several in a row. */
+export type FxBuilder<F extends Fx = Fx> = (ac: AudioContext) => F | readonly Fx[];
 
 export interface Levels {
   master: number;
@@ -29,7 +39,16 @@ export interface Voices {
    */
   env: (g: GainNode, t: number, a: number, peak: number, dur: number) => void;
   /** One oscillator note, sliding f0 → f1 (exponentially) over dur. */
-  tone: (f0: number, f1: number, t: number, dur: number, vol: number, type?: Wave, bus?: Bus, attack?: number) => void;
+  tone: (
+    f0: number,
+    f1: number,
+    t: number,
+    dur: number,
+    vol: number,
+    type?: Wave,
+    bus?: Target,
+    attack?: number,
+  ) => void;
   /** Filtered noise, the cutoff sliding f0 → f1; q is set on the filter only when given. */
   hiss: (
     t: number,
@@ -38,7 +57,7 @@ export interface Voices {
     f0?: number,
     f1?: number,
     type?: BiquadFilterType,
-    bus?: Bus,
+    bus?: Target,
     q?: number,
     attack?: number,
   ) => void;
@@ -48,7 +67,7 @@ export interface Voices {
    * (instruments.ts).
    */
   fm: {
-    (f: number, t: number, dur: number, vol: number, ratio?: number, index?: number, bus?: Bus): void;
+    (f: number, t: number, dur: number, vol: number, ratio?: number, index?: number, bus?: Target): void;
     (f: number, t: number, dur: number, vol: number, options: FmOptions): void;
   };
   /** A sub bass: a sine punched up at the start, dropping to f, through a soft clipper. */
@@ -58,7 +77,12 @@ export interface Voices {
   /** Two pulse waves with their width swept by an LFO (PWM), through an enveloped lowpass. */
   pulse: (f: number, t: number, dur: number, vol: number, options?: PulseOptions) => void;
   /** MIDI notes `gap` seconds apart (0 = rest), each a tone of `dur`. */
-  notes: (list: readonly number[], t: number, gap: number, dur: number, vol: number, type?: Wave, bus?: Bus) => void;
+  notes: (list: readonly number[], t: number, gap: number, dur: number, vol: number, type?: Wave, bus?: Target) => void;
+  /**
+   * Effects (effects.ts) for voices to play into: pass the insert as their bus. It's built on
+   * the context when first played into, and feeds `to` (default 'music').
+   */
+  insert: <F extends Fx>(build: FxBuilder<F>, to?: Target) => Insert<F>;
   /** Keep the music quiet until context time `until` (a jingle has the floor); it then resumes. */
   hold: (until: number) => void;
 }
@@ -108,6 +132,11 @@ export interface SynthOptions<T extends { bpm: number }, M> {
    * is taken after it).
    */
   echo?: { time: number; feedback: number; wet: number; cut?: number; bus?: Bus } | false;
+  /**
+   * Effects on a whole bus (effects.ts), after its level: a compressor on the music evens out
+   * the tracks, one on master the whole mix.
+   */
+  inserts?: Partial<Record<'master' | Bus, FxBuilder>>;
   /** A compressor between master and the speakers: true for the browser's defaults, or its settings. */
   compressor?: boolean | Partial<Record<'threshold' | 'knee' | 'ratio' | 'attack' | 'release', number>>;
   /** When music() was asked for before unlock(), its first step plays this long after (default 0.05 s). */
@@ -165,6 +194,13 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     }
     master = ac.createGain();
     master.gain.value = soundOn ? levels.master : 0;
+    const into = (bus: 'master' | Bus, node: GainNode, to: AudioNode) => {
+      const build = opts.inserts?.[bus];
+      if (!build) return node.connect(to);
+      const fx = built(build);
+      node.connect(fx.input);
+      fx.output.connect(to);
+    };
     let out: AudioNode = ac.destination;
     if (compressor) {
       const c = ac.createDynamicsCompressor();
@@ -181,14 +217,16 @@ export function createSynth<T extends { bpm: number }, M extends object = object
       hp.frequency.value = 180;
       lp.type = 'lowpass';
       lp.frequency.value = 4200;
-      master.connect(hp).connect(lp).connect(out);
-    } else master.connect(out);
+      into('master', master, hp);
+      hp.connect(lp).connect(out);
+    }
+    if (!speaker) into('master', master, out);
     musicBus = ac.createGain();
     musicBus.gain.value = levels.music;
-    musicBus.connect(master);
+    into('music', musicBus, master);
     sfxBus = ac.createGain();
     sfxBus.gain.value = levels.sfx;
-    sfxBus.connect(master);
+    into('sfx', sfxBus, master);
     if (echo) {
       const d = ac.createDelay(1),
         fb = ac.createGain(),
@@ -238,7 +276,29 @@ export function createSynth<T extends { bpm: number }, M extends object = object
   }
 
   // ---------- voices ----------
-  const busNode = (b: Bus) => (b === 'music' ? musicBus : sfxBus)!;
+  const built = (build: FxBuilder): Fx => {
+    const fx = build(ac!);
+    return 'input' in fx ? fx : chain(ac!, fx);
+  };
+  // each insert's effects on each context, made when first played into
+  const inserts = new WeakMap<Insert, { ac: AudioContext; fx: Fx }>();
+  function insert<F extends Fx>(build: FxBuilder<F>, to: Target = 'music'): Insert<F> {
+    const ins: Insert<F> = {
+      get fx() {
+        if (!ac) return null;
+        let made = inserts.get(ins);
+        if (made?.ac !== ac) {
+          made = { ac, fx: built(build) };
+          made.fx.output.connect(busNode(to));
+          inserts.set(ins, made);
+        }
+        return made.fx as F;
+      },
+    };
+    return ins;
+  }
+  const busNode = (b: Target): AudioNode =>
+    b === 'music' ? musicBus! : b === 'sfx' ? sfxBus! : 'fx' in b ? b.fx!.input : b;
   function env(g: GainNode, t: number, a: number, peak: number, dur: number) {
     if (a > 0) {
       g.gain.setValueAtTime(floor, t);
@@ -253,7 +313,7 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     dur: number,
     vol: number,
     type: Wave = 'square',
-    bus: Bus = 'sfx',
+    bus: Target = 'sfx',
     a = attack,
   ) {
     const o = ac!.createOscillator(),
@@ -279,7 +339,7 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     f0 = 3000,
     f1 = 300,
     type: BiquadFilterType = 'lowpass',
-    bus: Bus = 'sfx',
+    bus: Target = 'sfx',
     q?: number,
     a = 0.004,
   ) {
@@ -305,7 +365,7 @@ export function createSynth<T extends { bpm: number }, M extends object = object
   }
   // the richer voices (instruments.ts); the PC speaker plays them as plain squares
   const kit = (): inst.Kit => ({ ac: ac!, out: busNode, tail });
-  const square = (f: number, t: number, dur: number, vol: number, o?: { bus?: Bus; release?: number }) =>
+  const square = (f: number, t: number, dur: number, vol: number, o?: { bus?: Target; release?: number }) =>
     tone(f, f, t, dur + (o?.release ?? 0), vol, 0.5, o?.bus ?? 'music');
   const sub = (f: number, t: number, dur: number, vol: number, o?: SubOptions) =>
     speaker ? square(f, t, dur, vol, o) : inst.sub(kit(), f, t, dur, vol, o);
@@ -320,7 +380,7 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     vol: number,
     ratio: number | FmOptions = 2,
     index = 2,
-    bus: Bus = 'music',
+    bus: Target = 'music',
   ) {
     if (typeof ratio === 'object') {
       if (speaker) square(f, t, dur, vol, ratio);
@@ -343,8 +403,15 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     c.stop(t + dur + tail);
     m.stop(t + dur + tail);
   }
-  const notes = (list: readonly number[], t: number, gap: number, dur: number, vol: number, type?: Wave, bus?: Bus) =>
-    list.forEach((n, k) => n && tone(midi(n), midi(n), t + k * gap, dur, vol, type, bus));
+  const notes = (
+    list: readonly number[],
+    t: number,
+    gap: number,
+    dur: number,
+    vol: number,
+    type?: Wave,
+    bus?: Target,
+  ) => list.forEach((n, k) => n && tone(midi(n), midi(n), t + k * gap, dur, vol, type, bus));
   const hold = (until: number) => {
     holdUntil = Math.max(holdUntil, until);
   };
@@ -375,6 +442,7 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     supersaw,
     pulse: pulseVoice,
     notes,
+    insert,
     hold,
   };
   const { step, effects, methods } = opts.arrange(voices);

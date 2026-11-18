@@ -1,22 +1,19 @@
-// Procedural sound: a little street band for each scene (an accordion-ish pulse lead on the
-// harbour polka, a brass march in the park, a music-box waltz on the roofs, a breakneck fanfare
-// while the glove lasts) and the effects, all made with Web Audio by @nostalgia/audio. Every
-// tune is written for Keepsake. The context is only created by unlock(), which the page calls
-// from a user gesture; the demo never creates one.
+// Procedural sound: a serenade on the title (theme.js) and a little street band for each scene
+// (an accordion-ish pulse lead on the harbour polka, a brass march in the park, a music-box
+// waltz on the roofs, a breakneck fanfare while the glove lasts) and the effects, all made with
+// Web Audio by @nostalgia/audio. Every tune is written for Keepsake. The context is only
+// created by unlock(), which the page calls from a user gesture; the demo never creates one.
 //
 //   const audio = createAudio({ on: true });
 //   audio.unlock();  audio.music('harbour');  audio.sfx('catch', { n: 3 });  audio.setOn(false);
 import { createSynth, line, midi, span } from '@nostalgia/audio';
+import { THEME, themePlayer } from './theme.js';
 
 const CH = { M: [0, 4, 7], m: [0, 3, 7] };
 // four bars each: chord roots (bass and stabs), the lead, a bass pattern (x root, o fifth,
 // c a chord stab) and drums (k kick, s snare, h hat), `bar` steps to the bar
 const TRACKS = {
-  title: {
-    bpm: 96, bar: 16, lead: 'triangle', vol: 0.08, bars: [[53, 'M'], [57, 'm'], [58, 'M'], [48, 'M']], bass: 'x.......o.......', drums: 'k.......s.......',
-    tune: `77 - - - 76 - 74 - 72 - - - 69 - - -  72 - - - 76 - 79 - 81 - - - 79 - - -
-           77 - - - 74 - 70 - 74 - 77 - 79 - - -  81 - - - 79 - 76 - 72 - - - - - - -`,
-  },
+  title: THEME, // theme.js: longer, on the richer voices
   harbour: {
     bpm: 132, bar: 16, lead: 0.25, vol: 0.06, bars: [[53, 'M'], [50, 'm'], [58, 'M'], [48, 'M']], bass: 'x...c...o...c...', drums: 'k.h.s.h.k.h.s.hh',
     tune: `72 . 69 . 72 - 77 - 76 . 74 . 72 - - .  74 . 69 . 74 - 77 - 81 - 79 . 77 - - .
@@ -38,14 +35,18 @@ const TRACKS = {
            78 . 81 . 86 . 90 - 86 . 81 . 86 - - .  85 - 86 - 88 - 85 - 81 - 78 - 76 - - -`,
   },
 };
-for (const tr of Object.values(TRACKS)) tr.line = line(tr.tune);
+for (const tr of Object.values(TRACKS)) if (tr.tune) tr.line = line(tr.tune);
 
 export function createAudio({ on = true } = {}) {
   return createSynth({
     on, seed: 41, levels: { master: 0.55, music: 0.3, sfx: 0.8 }, tracks: TRACKS,
     pulse: true, attack: 0.005, startDelay: 0.06, echo: { time: 0.22, feedback: 0.22, wet: 0.16, cut: 2600 },
-    arrange: ({ tone, hiss, notes, fm, hold }) => ({
+    arrange: v => {
+      const { tone, hiss, notes, fm, hold } = v;
+      const theme = themePlayer(v);
+      return {
       step(tr, i, t, dt) {
+        if (tr.theme) return theme(i, t, dt);
         const [root, kind] = tr.bars[Math.floor(i / tr.bar) % tr.bars.length], s = i % tr.bar, ch = CH[kind];
         const b = tr.bass[s];
         if (b === 'x') tone(midi(root - 12), midi(root - 12), t, dt * 2.2, 0.16, 'triangle', 'music');
@@ -103,6 +104,7 @@ export function createAudio({ on = true } = {}) {
         tick: t => tone(620, 620, t, 0.03, 0.03, 0.5),
         select: t => tone(620, 930, t, 0.07, 0.05, 0.25),
       },
-    }),
+      };
+    },
   });
 }

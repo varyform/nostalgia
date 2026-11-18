@@ -26,10 +26,13 @@ export interface Recorder {
   tick(n?: number, ms?: number): void;
   /** Checksums of every buffer made so far, freshly computed. */
   buffers(): string[];
+  /** A source ends, as the browser says once it has stopped: its onended runs. `id` is '#n'. */
+  end(id: string): void;
 }
 
 export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder {
   const log: string[] = [];
+  const nodes = new Map<string, unknown>();
   const timers = new Map<number, () => void>();
   const buffers: MockBuffer[] = [];
   const contexts: MockContext[] = [];
@@ -103,6 +106,7 @@ export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder 
     }
   }
   class MockSource extends MockNode {
+    onended: (() => void) | null = null;
     start(...args: Arg[]) {
       call('#' + this.id, 'start', args);
     }
@@ -257,6 +261,7 @@ export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder 
     }
     #make<T extends { id: number }>(what: string, node: T, args: Arg[] = []) {
       log.push(`#${node.id}=${what}(${args.map(fmt).join(',')})`);
+      nodes.set(`#${node.id}`, node);
       return node;
     }
     createGain() {
@@ -282,6 +287,12 @@ export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder 
     }
     createWaveShaper() {
       return this.#make('createWaveShaper', new MockShaper(this));
+    }
+    createIIRFilter(feedforward: number[], feedback: number[]) {
+      return this.#make('createIIRFilter', new MockNode(this), [
+        feedforward.map(fmt).join(' '),
+        feedback.map(fmt).join(' '),
+      ]);
     }
     createDynamicsCompressor() {
       return this.#make('createDynamicsCompressor', new MockCompressor(this));
@@ -334,6 +345,9 @@ export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder 
       }
     },
     buffers: () => buffers.map(b => `#${b.id}:${b.sum(true)}`),
+    end(id) {
+      (nodes.get(id) as MockSource | undefined)?.onended?.();
+    },
   };
   return rec;
 }

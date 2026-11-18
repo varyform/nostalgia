@@ -20,7 +20,7 @@ const DEMO = [
 ];
 const MUSIC = ['zone0', 'zone1', 'zone2', 'final'];
 
-export function boot(cv, { demo = false, reducedMotion = false, sound = true, onExit = null, renderer, segment } = {}) {
+export function boot(cv, { demo = false, reducedMotion = false, sound = true, onExit = null, renderer, score = createAudio, segment } = {}) {
   const { listen, offAll } = listeners();
 
   const input = createInput({
@@ -30,7 +30,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     ...(demo && { target: new EventTarget(), getGamepads: () => [], register: false }),
   });
   const sim = createSim();
-  const audio = demo ? null : createAudio({ on: sound });
+  const audio = demo ? null : score({ on: sound });
   const view = renderer(cv);
 
   const saved = storage(BEST_KEY, { enabled: !demo });

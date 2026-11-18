@@ -35,10 +35,14 @@
  *   audio.setOn(!audio.on);
  *   audio.destroy();
  *
- * Voices (all times are context seconds; bus is 'music' or 'sfx', default 'sfx' except fm):
+ * Voices (all times are context seconds; bus is 'music', 'sfx', an insert or a node, default
+ * 'sfx' except fm and the richer voices):
  *   tone(f0, f1, t, dur, vol, type = 'square', bus, attack)   one oscillator, f0 → f1
  *   hiss(t, dur, vol, f0 = 3000, f1 = 300, filter = 'lowpass', bus, q, attack = 0.004)   filtered noise
  *   fm(f, t, dur, vol, ratio = 2, index = 2, bus = 'music')   two-operator FM
+ *   notes(midiList, t, gap, dur, vol, type, bus)               a run of tones, 0 = rest
+ *   hold(until)                                                music waits until then (a jingle)
+ *   env(gain, t, attack, peak, dur), ac, noise, bus.{master,music,sfx}   for custom graphs
  *
  * The richer voices (instruments.ts), each one note with an ADSR (attack, decay, sustain,
  * release: held until t + dur, then released) and a bus (default 'music'):
@@ -46,9 +50,13 @@
  *   supersaw(f, t, dur, vol, { detune, mix, width, cutoff, reso, envmod })   seven saws in stereo
  *   pulse(f, t, dur, vol, { width, pwm, rate, detune, cutoff, reso, envmod })   PWM pulses
  *   fm(f, t, dur, vol, { ratio, fine, index, modDecay, modSustain })   FM with an index envelope
- *   notes(midiList, t, gap, dur, vol, type, bus)               a run of tones, 0 = rest
- *   hold(until)                                                music waits until then (a jingle)
- *   env(gain, t, attack, peak, dur), ac, noise, bus.{master,music,sfx}   for custom graphs
+ *
+ * Effects (effects.ts), each an { input, output }, made on a context:
+ *   delay(ac, { time, feedback, wet, dry, pan, cut })          a mono echo beside the dry sound
+ *   distortion(ac, { amount, shape, ceiling, mix, gain })      a hard clipper (shape 0) or a wavefolder
+ *   compressor(ac, { threshold, ratio, knee, attack, release, makeup })   RMS, soft knee; makeup 'auto'
+ * Voices play into them through v.insert(ac => fx or [fx, …], to = 'music'), passed as their
+ * bus; a whole bus through the synth's `inserts: { music, sfx, master }`.
  *
  * An attack of 0 starts a voice at its peak and only decays: a pluck, a blip.
  *
@@ -66,12 +74,28 @@ export {
   type Arrangement,
   type Bus,
   type Effect,
+  type FxBuilder,
+  type Insert,
   type Levels,
   type Synth,
   type SynthOptions,
+  type Target,
   type Voices,
   type Wave,
 } from './synth.ts';
+export {
+  autoMakeup,
+  chain,
+  compressor,
+  delay,
+  distortion,
+  type CompressorFx,
+  type CompressorOptions,
+  type DelayFx,
+  type DelayOptions,
+  type DistortionOptions,
+  type Fx,
+} from './effects.ts';
 export {
   adsr,
   type Adsr,
