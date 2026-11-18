@@ -1,0 +1,38 @@
+[tools]
+node = "24.22.3"
+pnpm = "12.21.0"
+
+[env]
+_.path = ["./node_modules/.bin"]
+
+[tasks.install]
+description = "Install dependencies"
+run = "pnpm install"
+
+[tasks.dev]
+description = "Dev server for the launcher and every game"
+depends = ["install"]
+run = "vp dev"
+
+[tasks.build]
+description = "Compile pages into the game repos (all, or the ones named: launcher, skyhook-cga, skyhook-hd, dropzone)"
+depends = ["install"]
+run = "node scripts/build.js"
+
+[tasks.check]
+description = "Format check, lint and type-check"
+depends = ["install"]
+run = "vp check"
+
+[tasks.fmt]
+description = "Format sources"
+run = "vp fmt"
+
+[tasks.test]
+description = "Unit tests for the shared packages"
+depends = ["install"]
+run = "vp test run"
+
+[tasks.ci]
+description = "Everything CI runs"
+depends = ["check", "test", "build"]

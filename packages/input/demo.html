@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Input Glyphs</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: oklch(0.17 0.02 260);
+        --ink: oklch(0.93 0.01 260);
+        --muted: oklch(0.65 0.02 260);
+        --line: oklch(0.3 0.02 260);
+      }
+      body {
+        margin: 0;
+        padding: 24px 16px 48px;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          15px/1.4 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        display: grid;
+        gap: 28px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0;
+      }
+      h2 {
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 10px;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+      section {
+        border-top: 1px solid var(--line);
+        padding-top: 16px;
+      }
+      canvas {
+        display: block;
+        max-width: 100%;
+      }
+      .live {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 22px;
+        align-items: center;
+        font-size: 17px;
+      }
+      .cga {
+        image-rendering: pixelated;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>@nostalgia/input glyphs</h1>
+      <p>
+        Every glyph kind per device family, vector and pixel pens. Press a key or a pad button: the live row follows the
+        device you used last (<span id="device"></span>).
+      </p>
+      <section>
+        <h2>Live, as &lt;input-glyph&gt;</h2>
+        <div class="live">
+          <span>Fly <input-glyph action="fly"></input-glyph></span>
+          <span>Fire <input-glyph action="fire" all></input-glyph></span>
+          <span>Bomb <input-glyph action="bomb"></input-glyph></span>
+          <span>Aim <input-glyph action="aim"></input-glyph></span>
+          <span>Map <input-glyph action="map"></input-glyph></span>
+          <span>Pause <input-glyph action="pause"></input-glyph></span>
+        </div>
+      </section>
+      <section>
+        <h2>Vector</h2>
+        <canvas id="vector"></canvas>
+      </section>
+      <section>
+        <h2>Pixel (CGA palette, 320 px wide, scaled ×3)</h2>
+        <canvas id="pixel" class="cga"></canvas>
+      </section>
+    </main>
+    <script type="module" src="./demo.ts"></script>
+  </body>
+</html>

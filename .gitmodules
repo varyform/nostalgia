@@ -1,6 +1,0 @@
-[submodule "striker"]
-	path = striker
-	url = git@github.com:varyform/skyhook.git
-[submodule "airborne-ranger"]
-	path = airborne-ranger
-	url = git@github.com:varyform/dropzone.git

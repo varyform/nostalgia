@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Nostalgia</title>
+    <meta name="description" content="Single-file remakes of DOS-era games." />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%2355ffff' d='M1 1h11l3 3v11H1z'/%3E%3Cpath fill='%23000080' d='M4 1h7v5H4zM3 9h10v6H3z'/%3E%3Cpath fill='%2355ffff' d='M8.5 2H10v3H8.5z'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
+    <style>
+      @layer reset, tokens, base, layout, components, overlays, utilities;
+
+      @layer reset {
+        *,
+        *::before,
+        *::after {
+          box-sizing: border-box;
+        }
+        * {
+          margin: 0;
+          padding: 0;
+        }
+        [hidden] {
+          display: none !important;
+        }
+        button {
+          font: inherit;
+          color: inherit;
+          background: none;
+          border: 0;
+          cursor: pointer;
+          text-shadow: inherit;
+        }
+        a {
+          color: inherit;
+        }
+        ul {
+          list-style: none;
+        }
+        canvas {
+          display: block;
+        }
+      }
+
+      @layer tokens {
+        :root {
+          color-scheme: dark;
+          --white: oklch(1 0 0);
+          --black: oklch(0 0 0);
+
+          /* private palette: DOS text-mode colours, pushed a little brighter */
+          --brand-navy: oklch(0.14 0.045 266);
+          --brand-blue: oklch(0.38 0.17 266);
+          --brand-blue-deep: oklch(0.27 0.13 266);
+          --brand-cyan: oklch(0.87 0.13 195);
+          --brand-yellow: oklch(0.94 0.16 103);
+          --brand-gray: oklch(0.88 0.02 255);
+          --brand-red: oklch(0.68 0.21 25);
+
+          /* hardware CGA palette 1 (high), used by the low-res previews */
+          --cga-0: #000000;
+          --cga-1: #55ffff;
+          --cga-2: #ff55ff;
+          --cga-3: #ffffff;
+
+          --color-canvas: var(--brand-navy);
+          --color-surface: var(--brand-blue-deep);
+          --color-surface-raised: var(--brand-blue);
+          --color-ink: var(--brand-gray);
+          --color-ink-muted: color-mix(in oklch, var(--brand-gray) 62%, var(--brand-blue));
+          --color-line: color-mix(in oklch, var(--brand-cyan) 60%, transparent);
+          --color-primary: var(--brand-cyan);
+          --color-accent: var(--brand-yellow);
+          --color-danger: var(--brand-red);
+          --color-on-primary: var(--brand-navy);
+          --color-primary-surface: color-mix(in oklch, var(--color-primary) 14%, transparent);
+          --shadow-hard: color-mix(in oklch, var(--black) 55%, transparent);
+          --glow: 0 0 0.35em color-mix(in oklch, currentColor 45%, transparent);
+          --font: 'VT323', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+          /* pad / key pictures from @nostalgia/input */
+          --glyph-cap: var(--color-ink);
+          --glyph-edge: color-mix(in oklch, var(--color-ink) 55%, var(--black));
+          --glyph-cap-ink: var(--color-surface);
+          --glyph-pad: var(--color-canvas);
+          --glyph-pad-ink: var(--color-ink);
+          --glyph-dim: var(--color-ink-muted);
+          --glyph-ink: var(--color-ink);
+        }
+      }
+
+      @layer base {
+        html,
+        body {
+          overscroll-behavior: none;
+        }
+        html {
+          background:
+            radial-gradient(
+              1200px 700px at 72% -12%,
+              color-mix(in oklch, var(--brand-blue) 42%, transparent),
+              transparent 70%
+            ),
+            radial-gradient(
+              900px 600px at -10% 110%,
+              color-mix(in oklch, var(--brand-cyan) 9%, transparent),
+              transparent 70%
+            ),
+            var(--color-canvas);
+          background-attachment: fixed;
+        }
+        body {
+          min-height: 100dvh;
+          font: 22px/1.2 var(--font);
+          color: var(--color-ink);
+          text-shadow: var(--glow);
+          -webkit-font-smoothing: antialiased;
+          -webkit-tap-highlight-color: transparent;
+        }
+        body::before {
+          content: '';
+          position: fixed;
+          inset: 0;
+          z-index: -1;
+          pointer-events: none;
+          background-image: radial-gradient(
+            color-mix(in oklch, var(--brand-cyan) 14%, transparent) 1px,
+            transparent 1.5px
+          );
+          background-size: 24px 24px;
+          mask-image: radial-gradient(ellipse at center, var(--black) 20%, transparent 78%);
+        }
+        ::selection {
+          background: var(--color-primary);
+          color: var(--color-on-primary);
+        }
+        :focus-visible {
+          outline: 2px dashed var(--color-accent);
+          outline-offset: 3px;
+        }
+        @media (max-width: 860px) {
+          body {
+            font-size: 20px;
+          }
+        }
+      }
+
+      @layer layout {
+        .screen {
+          min-height: 100dvh;
+          display: grid;
+          grid-template-rows: auto 1fr auto;
+        }
+        .desk {
+          width: 100%;
+          max-width: 1320px;
+          margin-inline: auto;
+          padding: 44px 32px 36px;
+          display: grid;
+          grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+          gap: 44px 40px;
+          align-items: start;
+        }
+        .desk__side {
+          display: grid;
+          gap: 44px;
+        }
+        @media (max-width: 860px) {
+          .desk {
+            grid-template-columns: minmax(0, 1fr);
+            padding: 32px 16px 24px;
+            gap: 36px;
+          }
+          .desk__side {
+            gap: 36px;
+          }
+        }
+      }
+
+      @layer components {
+        /* ---------- menu bar ---------- */
+        .menubar {
+          position: sticky;
+          top: 0;
+          z-index: 5;
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          padding: 1px 10px;
+          background: color-mix(in oklch, var(--color-ink) 94%, transparent);
+          color: var(--color-on-primary);
+          text-shadow: none;
+          -webkit-backdrop-filter: blur(8px);
+          backdrop-filter: blur(8px);
+        }
+        .menubar__brand {
+          padding: 0 0.6em 0 0.2em;
+          letter-spacing: 0.04em;
+        }
+        .menubar__item {
+          padding: 0 0.55em;
+          transition:
+            background 0.12s,
+            color 0.12s;
+        }
+        .menubar__item:hover {
+          background: var(--color-surface-raised);
+          color: var(--color-ink);
+        }
+        .menubar__item .hk {
+          color: var(--color-danger);
+        }
+        .menubar__clock {
+          margin-left: auto;
+          font-variant-numeric: tabular-nums;
+        }
+        @media (max-width: 860px) {
+          .menubar__item--wide {
+            display: none;
+          }
+        }
+
+        /* ---------- windows ---------- */
+        .window {
+          position: relative;
+          padding: 30px 18px 18px;
+          background: linear-gradient(180deg, var(--color-surface-raised), var(--color-surface) 75%);
+          border: 4px double var(--color-line);
+          border-radius: 4px;
+          box-shadow:
+            16px 16px 0 var(--shadow-hard),
+            0 0 0 1px color-mix(in oklch, var(--black) 40%, transparent),
+            0 0 90px -10px color-mix(in oklch, var(--color-primary) 22%, transparent);
+        }
+        .window__title {
+          position: absolute;
+          top: 0;
+          left: 50%;
+          translate: -50% -62%;
+          max-width: calc(100% - 40px);
+          padding: 0 0.6em;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font: inherit;
+          letter-spacing: 0.04em;
+          background: var(--color-primary);
+          color: var(--color-on-primary);
+          text-shadow: none;
+        }
+        .window__foot {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: 14px;
+          padding-top: 10px;
+          border-top: 1px dashed var(--color-line);
+          color: var(--color-ink-muted);
+        }
+        .window--detail {
+          display: grid;
+          gap: 24px;
+        }
+        .window--note p + p {
+          margin-top: 0.6em;
+        }
+        .window--note {
+          color: var(--color-ink-muted);
+        }
+        .window--note strong {
+          color: var(--color-ink);
+          font-weight: inherit;
+        }
+        @media (max-width: 860px) {
+          .window {
+            box-shadow:
+              10px 10px 0 var(--shadow-hard),
+              0 0 60px -10px color-mix(in oklch, var(--color-primary) 22%, transparent);
+          }
+        }
+        .is-shaking {
+          animation: shake 0.36s;
+        }
+        @keyframes shake {
+          20% {
+            translate: -7px 0;
+          }
+          40% {
+            translate: 7px 0;
+          }
+          60% {
+            translate: -4px 0;
+          }
+          80% {
+            translate: 4px 0;
+          }
+        }
+
+        /* ---------- game list ---------- */
+        .games-wrap {
+          position: relative;
+          margin-inline: -10px;
+        }
+        .games {
+          position: relative;
+          outline: none;
+        }
+        .games__bar {
+          position: absolute;
+          inset: 0 0 auto;
+          height: 0;
+          background: var(--color-primary);
+          border-radius: 2px;
+          box-shadow: 0 0 26px color-mix(in oklch, var(--color-primary) 45%, transparent);
+          pointer-events: none;
+          transition:
+            translate 0.2s var(--ease),
+            height 0.2s var(--ease);
+        }
+        .games-wrap:has(.games:focus-visible) .games__bar {
+          outline: 2px dashed var(--color-accent);
+          outline-offset: 3px;
+        }
+        .game {
+          position: relative;
+          display: grid;
+          grid-template-columns: auto 1fr auto;
+          column-gap: 12px;
+          padding: 6px 10px;
+          cursor: pointer;
+          border-radius: 2px;
+          transition:
+            color 0.15s,
+            background 0.15s;
+        }
+        .game:hover:not([aria-selected='true']) {
+          background: var(--color-primary-surface);
+        }
+        .game__key {
+          color: var(--color-ink-muted);
+        }
+        .game__name {
+          font-size: 1.15em;
+          line-height: 1;
+          letter-spacing: 0.03em;
+        }
+        .game__year {
+          color: var(--color-accent);
+        }
+        .game__sub {
+          grid-column: 2 / -1;
+          color: var(--color-ink-muted);
+          font-size: 0.85em;
+        }
+        .game--empty .game__name {
+          color: var(--color-ink-muted);
+        }
+        .game[aria-selected='true'],
+        .game[aria-selected='true'] > * {
+          color: var(--color-on-primary);
+          text-shadow: none;
+        }
+
+        /* ---------- preview ---------- */
+        .preview {
+          position: relative;
+          aspect-ratio: 16 / 10;
+          overflow: hidden;
+          background: var(--black);
+          border: 2px solid var(--color-line);
+          border-radius: 6px;
+        }
+        .preview canvas {
+          width: 100%;
+          height: 100%;
+        }
+        .preview::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          border-radius: inherit;
+          background:
+            radial-gradient(
+              ellipse 80% 50% at 30% 0%,
+              color-mix(in oklch, var(--white) 9%, transparent),
+              transparent 60%
+            ),
+            radial-gradient(ellipse at center, transparent 58%, color-mix(in oklch, var(--black) 55%, transparent));
+          box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--black) 60%, transparent);
+        }
+        .preview__tag {
+          position: absolute;
+          top: 8px;
+          left: 10px;
+          z-index: 1;
+          padding: 0 0.4em;
+          font-size: 0.8em;
+          color: var(--color-primary);
+          background: color-mix(in oklch, var(--black) 60%, transparent);
+        }
+
+        /* ---------- details ---------- */
+        .info {
+          display: grid;
+          grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+          gap: 24px 32px;
+        }
+        .info__main,
+        .info__side {
+          display: grid;
+          gap: 16px;
+          align-content: start;
+        }
+        @media (max-width: 1100px) {
+          .info {
+            grid-template-columns: minmax(0, 1fr);
+          }
+        }
+        .info__title {
+          font-size: 3.2em;
+          font-weight: normal;
+          line-height: 0.85;
+          letter-spacing: 0.03em;
+          text-transform: uppercase;
+          color: var(--color-accent);
+        }
+        .info__meta {
+          color: var(--color-primary);
+        }
+        .info__blurb {
+          max-width: 60ch;
+        }
+        .info__error {
+          color: var(--color-ink);
+          white-space: pre-line;
+        }
+        @media (max-width: 860px) {
+          .info__title {
+            font-size: 2.6em;
+          }
+        }
+
+        .chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .chip {
+          padding: 0 0.45em;
+          font-size: 0.85em;
+          color: var(--color-primary);
+          border: 1px solid var(--color-line);
+        }
+
+        .label {
+          display: flex;
+          align-items: center;
+          gap: 0.5em;
+          margin-bottom: 6px;
+          font-size: 0.85em;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--color-ink-muted);
+        }
+        .label::after {
+          content: '';
+          flex: 1;
+          border-top: 1px dashed var(--color-line);
+        }
+
+        .pairs {
+          display: grid;
+          grid-template-columns: auto 1fr;
+          gap: 6px 14px;
+          align-items: baseline;
+        }
+        .pairs dt {
+          color: var(--color-ink-muted);
+          white-space: nowrap;
+        }
+        .seg {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .seg__btn {
+          padding: 1px 12px 1px 8px;
+          border: 1px solid var(--color-line);
+          transition:
+            background 0.15s,
+            color 0.15s,
+            border-color 0.15s;
+        }
+        .seg__btn::before {
+          content: '( ) ';
+          white-space: pre;
+          color: var(--color-ink-muted);
+        }
+        .seg__btn[aria-checked='true'] {
+          color: var(--color-primary);
+          border-color: var(--color-primary);
+          background: var(--color-primary-surface);
+        }
+        .seg__btn[aria-checked='true']::before {
+          content: '(•) ';
+          color: var(--color-primary);
+        }
+        .seg__btn:hover {
+          border-color: var(--color-primary);
+        }
+        .seg__note {
+          margin-top: 6px;
+          font-size: 0.85em;
+          color: var(--color-ink-muted);
+        }
+
+        .actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 16px;
+          align-items: center;
+          padding-top: 4px;
+        }
+        .btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5em;
+          padding: 4px 18px;
+          text-decoration: none;
+          color: var(--color-ink);
+          background: var(--color-surface-raised);
+          box-shadow: 6px 6px 0 var(--shadow-hard);
+          transition:
+            translate 0.08s,
+            box-shadow 0.12s,
+            background 0.15s;
+        }
+        .btn:hover {
+          background: color-mix(in oklch, var(--color-surface-raised) 80%, var(--color-ink));
+        }
+        .btn:active {
+          translate: 6px 6px;
+          box-shadow: 0 0 0 var(--shadow-hard);
+        }
+        .btn--run {
+          font-size: 1.15em;
+          color: var(--color-on-primary);
+          background: var(--color-primary);
+          text-shadow: none;
+        }
+        .btn--run:hover {
+          background: var(--color-primary);
+          box-shadow:
+            6px 6px 0 var(--shadow-hard),
+            0 0 32px color-mix(in oklch, var(--color-primary) 60%, transparent);
+        }
+        .btn--ghost {
+          background: transparent;
+          border: 1px solid var(--color-line);
+          box-shadow: none;
+        }
+        .btn--ghost:hover {
+          background: var(--color-primary-surface);
+        }
+        .btn--ghost:active {
+          translate: 2px 2px;
+        }
+
+        /* ---------- function-key bar ---------- */
+        .keybar {
+          position: sticky;
+          bottom: 0;
+          z-index: 5;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0 4px;
+          padding: 2px 8px calc(2px + env(safe-area-inset-bottom));
+          background: var(--black);
+          text-shadow: none;
+        }
+        .key {
+          display: inline-flex;
+          align-items: baseline;
+        }
+        .key__n {
+          padding: 0 0.25em;
+          color: var(--color-ink);
+        }
+        .key__l {
+          min-width: 4.6em;
+          padding: 0 0.45em;
+          color: var(--color-on-primary);
+          background: var(--color-primary);
+          transition: background 0.12s;
+        }
+        button.key:hover .key__l {
+          background: var(--color-accent);
+        }
+        .key[aria-pressed='false'] .key__l {
+          background: var(--color-ink-muted);
+        }
+        @media (hover: none) {
+          .key--hint {
+            display: none;
+          }
+        }
+
+        /* ---------- help dialog ---------- */
+        .dialog {
+          margin: auto;
+          width: min(560px, calc(100% - 32px));
+          padding: 30px 24px 24px;
+          overflow: visible;
+          color: var(--color-ink);
+          background: var(--color-surface-raised);
+          border: 4px double var(--color-ink);
+          box-shadow: 16px 16px 0 var(--shadow-hard);
+        }
+        .dialog::backdrop {
+          background: color-mix(in oklch, var(--black) 55%, transparent);
+          -webkit-backdrop-filter: blur(2px);
+          backdrop-filter: blur(2px);
+        }
+        .dialog .window__title {
+          background: var(--color-ink);
+        }
+        .dialog__body {
+          display: grid;
+          gap: 18px;
+        }
+        .dialog__actions {
+          display: flex;
+          justify-content: center;
+        }
+      }
+
+      @layer overlays {
+        /* DOS prompt used for boot, launch and exit */
+        .term {
+          position: fixed;
+          inset: 0;
+          z-index: 50;
+          padding: max(28px, 5vh) max(16px, 5vw);
+          overflow: hidden;
+          font-size: clamp(20px, 2.1vw, 28px);
+          color: var(--color-ink);
+          background: var(--black);
+          cursor: default;
+        }
+        .term__out {
+          max-width: 80ch;
+          white-space: pre-wrap;
+        }
+        .term__out > :last-child::after {
+          content: '';
+          display: inline-block;
+          width: 0.55em;
+          height: 0.95em;
+          margin-left: 1px;
+          vertical-align: -0.12em;
+          background: currentColor;
+          animation: blink 1.06s steps(1) infinite;
+        }
+        .term__hint {
+          position: absolute;
+          right: max(16px, 5vw);
+          bottom: max(16px, 4vh);
+          font-size: 0.7em;
+          color: var(--color-ink-muted);
+        }
+        @keyframes blink {
+          50% {
+            opacity: 0;
+          }
+        }
+
+        .crt {
+          position: fixed;
+          inset: 0;
+          z-index: 100;
+          pointer-events: none;
+          background:
+            repeating-linear-gradient(
+              to bottom,
+              transparent 0 2px,
+              color-mix(in oklch, var(--black) 20%, transparent) 2px 4px
+            ),
+            radial-gradient(ellipse at center, transparent 60%, color-mix(in oklch, var(--black) 45%, transparent));
+        }
+        .no-crt .crt {
+          display: none;
+        }
+
+        .screen.is-powering {
+          animation: power-on 0.6s var(--ease) both;
+        }
+        @keyframes power-on {
+          0% {
+            transform: scale(0.3, 0.004);
+            filter: brightness(5);
+          }
+          35% {
+            transform: scale(1, 0.006);
+            filter: brightness(3);
+          }
+          100% {
+            transform: none;
+            filter: none;
+          }
+        }
+      }
+
+      @layer utilities {
+        input-glyph {
+          text-shadow: none;
+        }
+        .sr-only {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          overflow: hidden;
+          clip-path: inset(50%);
+          white-space: nowrap;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .games__bar,
+          .btn,
+          .game {
+            transition: none;
+          }
+          .screen.is-powering,
+          .is-shaking {
+            animation: none;
+          }
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screen">
+      <header class="menubar">
+        <span class="menubar__brand">≡ NOSTALGIA</span>
+        <button class="menubar__item" data-action="help"><span class="hk">H</span>elp</button>
+        <button class="menubar__item menubar__item--wide" data-action="sound">
+          <span class="hk">S</span>ound: <span data-state="sound"></span>
+        </button>
+        <button class="menubar__item menubar__item--wide" data-action="crt">
+          S<span class="hk">c</span>anlines: <span data-state="crt"></span>
+        </button>
+        <span class="menubar__clock" id="clock"></span>
+      </header>
+
+      <main class="desk">
+        <div class="desk__side">
+          <section class="window window--list" aria-labelledby="list-title">
+            <h2 class="window__title" id="list-title">C:\NOSTALGIA</h2>
+            <div class="games-wrap">
+              <div class="games__bar" id="bar"></div>
+              <ul class="games" id="games" role="listbox" tabindex="0" aria-label="Games"></ul>
+            </div>
+            <footer class="window__foot"><span id="count"></span><span>655,360 bytes free</span></footer>
+          </section>
+
+          <section class="window window--note" aria-labelledby="note-title">
+            <h2 class="window__title" id="note-title">README.TXT</h2>
+            <p>
+              Remakes of DOS-era games, <strong>one HTML file each</strong>. No install, no build, no assets: art and
+              sound are made in code.
+            </p>
+            <p>
+              Pick a game with <input-glyph action="select"></input-glyph>, a version with
+              <input-glyph action="version"></input-glyph>, then <input-glyph action="run"></input-glyph>. Gamepads work
+              too.
+            </p>
+          </section>
+        </div>
+
+        <section class="window window--detail" id="detail" aria-labelledby="detail-title">
+          <h2 class="window__title" id="detail-title"></h2>
+          <div class="preview">
+            <canvas id="preview" aria-hidden="true"></canvas>
+            <span class="preview__tag" id="preview-tag"></span>
+          </div>
+          <div class="info" id="info"></div>
+        </section>
+      </main>
+
+      <nav class="keybar" aria-label="Shortcuts">
+        <button class="key" data-action="help">
+          <span class="key__n"><input-glyph action="help"></input-glyph></span><span class="key__l">Help</span>
+        </button>
+        <button class="key" data-action="sound" data-pressed="sound">
+          <span class="key__n"><input-glyph action="sound"></input-glyph></span><span class="key__l">Sound</span>
+        </button>
+        <button class="key" data-action="crt" data-pressed="crt">
+          <span class="key__n"><input-glyph action="crt"></input-glyph></span><span class="key__l">Scanlines</span>
+        </button>
+        <span class="key key--hint"
+          ><span class="key__n"><input-glyph action="select"></input-glyph></span
+          ><span class="key__l">Select</span></span
+        >
+        <span class="key key--hint"
+          ><span class="key__n"><input-glyph action="version"></input-glyph></span
+          ><span class="key__l">Version</span></span
+        >
+        <button class="key" data-action="run">
+          <span class="key__n"><input-glyph action="run"></input-glyph></span><span class="key__l">Run</span>
+        </button>
+        <button class="key" data-action="quit">
+          <span class="key__n"><input-glyph action="quit"></input-glyph></span><span class="key__l">Quit</span>
+        </button>
+      </nav>
+    </div>
+
+    <dialog class="dialog" id="help" aria-labelledby="help-title">
+      <h2 class="window__title" id="help-title">HELP</h2>
+      <div class="dialog__body">
+        <p>Single-file remakes of DOS-era games. Each lives in its own folder and runs straight off the disk.</p>
+        <dl class="pairs">
+          <dt><input-glyph action="select" all></input-glyph></dt>
+          <dd>Select a game</dd>
+          <dt><input-glyph action="version" all></input-glyph></dt>
+          <dd>Switch version (CGA / HD)</dd>
+          <dt><input-glyph action="run" all></input-glyph></dt>
+          <dd>Run the game</dd>
+          <dt><input-glyph keys="Digit1"></input-glyph>–<input-glyph keys="Digit9"></input-glyph></dt>
+          <dd>Jump to a game</dd>
+          <dt><input-glyph action="sound" all></input-glyph></dt>
+          <dd>PC speaker on / off</dd>
+          <dt><input-glyph action="crt" all></input-glyph></dt>
+          <dd>Scanlines on / off</dd>
+          <dt><input-glyph action="quit" all></input-glyph></dt>
+          <dd>Exit to DOS</dd>
+        </dl>
+        <form method="dialog" class="dialog__actions"><button class="btn btn--run">OK</button></form>
+      </div>
+    </dialog>
+
+    <div class="term" id="term" role="status">
+      <div class="term__out" id="term-out"></div>
+      <div class="term__hint" id="term-hint"></div>
+    </div>
+    <div class="crt" aria-hidden="true"></div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

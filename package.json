@@ -1,0 +1,14 @@
+{
+  "name": "nostalgia",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@nostalgia/input": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "vite": "npm:@voidzero-dev/vite-plus-core@8.3.8000",
+    "vite-plugin-singlefile": "2.3.4",
+    "vite-plus": "1.7.0"
+  }
+}
