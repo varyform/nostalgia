@@ -1,0 +1,4 @@
+# The image needs only the compiled pages and the nginx config.
+*
+!dist/
+!config/nginx.conf

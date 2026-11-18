@@ -1,0 +1,37 @@
+# The launcher and every game page in dist/, served by nginx at https://ogg.ol3h.org.
+#
+#   mise run deploy        build and roll out (kamal deploy)
+#   kamal app logs -f      or: kamal logs / kamal shell (aliases below)
+#
+# Kamal builds from a clean checkout of the committed HEAD, not the working tree:
+# build and commit dist/ first.
+service: nostalgia
+image: nostalgia
+
+servers:
+  web:
+    - px.kamal
+
+# Cloudflare terminates TLS for ol3h.org and forwards plain HTTP, like the other
+# ol3h.org sites on this server.
+proxy:
+  ssl: false
+  host: ogg.ol3h.org
+  app_port: 80
+  healthcheck:
+    path: /up
+  # The infra dashboards read referrers and visitors from kamal-proxy's log.
+  logging:
+    request_headers: [Referer, Cache-Control, Last-Modified, User-Agent]
+
+# A localhost registry: Kamal runs it on this machine and the server pulls the
+# image through an SSH tunnel, so no registry account is needed.
+registry:
+  server: localhost:5555
+
+builder:
+  arch: amd64
+
+aliases:
+  logs: app logs -f
+  shell: app exec --interactive --reuse "sh"

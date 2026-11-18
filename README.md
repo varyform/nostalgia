@@ -67,6 +67,11 @@ mise run ci           # all of the above
 
 Commit `dist/` together with the sources it was built from.
 
+## Deploy
+
+`mise run deploy` (Kamal, `config/deploy.yml`) serves `dist/` with nginx at https://ogg.ol3h.org, from the server
+`px.kamal`. Kamal builds the image from the committed HEAD, not the working tree, so build and commit `dist/` first.
+
 ## Shared input: `@nostalgia/input`
 
 Each game registers its actions with keyboard/mouse and gamepad bindings; the module reads keyboard, mouse buttons and
