@@ -1,0 +1,60 @@
+{
+  "title": "Triform",
+  "exe": "TRIFORM.EXE",
+  "after": "Metal Mutant",
+  "year": 1991,
+  "genre": "Shape-shifting action puzzler",
+  "tags": ["Action", "Puzzle", "Side-view"],
+  "blurb": "A salvage robot wakes deep inside a dead orbital foundry. Shift between android, raptor and tank to beat the locks each one alone can open, fight up through three zones and silence the rogue mind at the core.",
+  "facts": [
+    ["Zones", "Slag Pits, Coolant Works, Core Spire"],
+    ["Forms", "Android, Raptor, Tank"],
+    ["Input", "Keyboard, gamepad"]
+  ],
+  "input": {
+    "actions": {
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "jump": { "keys": ["Space", "ArrowUp", "KeyW"], "pad": ["South"] },
+      "attack": { "keys": ["KeyZ", "KeyJ"], "pad": ["West"] },
+      "special": { "keys": ["KeyX", "KeyK"], "pad": ["North"] },
+      "prev": { "keys": ["KeyQ"], "pad": ["L1"] },
+      "next": { "keys": ["KeyE"], "pad": ["R1"] },
+      "form1": { "keys": ["Digit1"] },
+      "form2": { "keys": ["Digit2"] },
+      "form3": { "keys": ["Digit3"] },
+      "start": { "keys": ["Space", "Enter"], "pad": ["South", "Start"] },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"] },
+      "map": { "keys": ["Tab"], "pad": ["Select"] },
+      "restart": { "keys": ["KeyR"], "pad": ["North"] },
+      "quit": { "keys": ["KeyQ"], "pad": ["Select"] },
+      "back": { "keys": ["Escape"], "pad": ["East"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "move": { "keys": ["Arrows"], "pad": ["LStick"] },
+      "morph": { "keys": ["KeyQ", "KeyE"], "pad": ["L1", "R1"] },
+      "forms": { "keys": ["Digit1", "Digit2", "Digit3"] }
+    }
+  },
+  "controls": [
+    ["move", "Move"],
+    ["jump", "Jump"],
+    ["attack", "Attack"],
+    ["special", "Special"],
+    ["morph", "Morph"],
+    ["pause", "Pause"]
+  ],
+  "versions": [
+    {
+      "key": "vga",
+      "label": "VGA",
+      "entry": "index.html",
+      "tag": "VGA · 320×200 · 256 colours",
+      "note": "Hand-dithered 256-colour look, shown at 4:3. Best score and time are saved in the browser."
+    }
+  ]
+}

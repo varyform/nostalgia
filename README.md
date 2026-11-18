@@ -11,6 +11,7 @@ no external assets. `dist/index.html` is the launcher, a DOS-style menu with liv
 | ---------------- | -------- | ---------------------- | ---------------------------------------------------------- |
 | `games/skyhook`  | Skyhook  | Striker (1985)         | `dist/skyhook-cga.html` (CGA), `dist/skyhook-hd.html` (HD) |
 | `games/dropzone` | Dropzone | Airborne Ranger (1988) | `dist/dropzone.html`                                       |
+| `games/triform`  | Triform  | Metal Mutant (1991)    | `dist/triform.html` (VGA)                                  |
 
 ## Play
 
@@ -27,7 +28,7 @@ Open `dist/index.html` in a desktop or mobile browser (or any game's file direct
 | `F10` / `Q`    | Exit to DOS             |
 
 Run zooms the game out of its preview. To come back, leave from the game's title screen (Skyhook: `Q` / Select,
-Dropzone: `Esc` / B) or press the browser's Back button.
+Dropzone: `Esc` / B, Triform: `Q` / `Esc` / B) or press the browser's Back button.
 
 Mouse and touch work too: click a game to select it, double-click or press **Run** to start it. With a gamepad: d-pad
 selects, A / ✕ runs, and the key hints turn into the pad's buttons.
