@@ -6,20 +6,8 @@
 //
 //   const audio = createAudio({ on: true, style: 'rich' });
 //   audio.unlock();  audio.music('v0');  audio.sfx('slide');  audio.setOn(false);
-const midi = n => 440 * 2 ** ((n - 69) / 12);
-const NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-// "C5 . E5 - G#4": one token per 16th step; "." rests, "-" holds the previous note
-function seq(s) {
-  const out = [];
-  for (const tok of s.trim().split(/\s+/)) {
-    if (tok === '|') continue;
-    if (tok === '.') { out.push(0); continue; }
-    if (tok === '-') { out.push(-1); continue; }
-    const m = tok.match(/^([A-G])([#b]?)(\d)$/);
-    out.push(m ? 12 * (+m[3] + 1) + NOTE[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) : 0);
-  }
-  return out;
-}
+import { createSynth, midi, seq, span } from '@nostalgia/audio';
+
 const CH = { M: [0, 4, 7], m: [0, 3, 7], s: [0, 5, 7], M7: [0, 4, 7, 11], m7: [0, 3, 7, 10] };
 
 const TRACKS = {
@@ -74,146 +62,82 @@ const PADS = [72, 76, 79, 67]; // the Order Up! pads: up, right, down, left
 
 export function createAudio({ on = true, style = 'rich' } = {}) {
   const speaker = style === 'speaker';
-  let ac = null, master = null, musicBus = null, sfxBus = null, noise = null;
-  let soundOn = on, track = null, trackName = null, step = 0, nextT = 0, timer = 0, lastPour = 0;
-
-  function unlock() {
-    if (ac) { if (ac.state === 'suspended') void ac.resume(); return; }
-    try { ac = new AudioContext(); } catch { ac = null; return; }
-    master = ac.createGain(); master.gain.value = soundOn ? 0.55 : 0; master.connect(ac.destination);
-    musicBus = ac.createGain(); musicBus.gain.value = speaker ? 0.22 : 0.3; musicBus.connect(master);
-    sfxBus = ac.createGain(); sfxBus.gain.value = 0.7; sfxBus.connect(master);
-    if (!speaker) {
-      // a short slap-back echo on the music
-      const d = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();
-      d.delayTime.value = 0.19; fb.gain.value = 0.28; wet.gain.value = 0.22;
-      musicBus.connect(d); d.connect(fb).connect(d); d.connect(wet).connect(master);
-    }
-    noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
-    const data = noise.getChannelData(0);
-    let seed = 11;
-    for (let i = 0; i < data.length; i++) { seed = (seed * 16807) % 2147483647; data[i] = (seed / 2147483647) * 2 - 1; }
-    timer = setInterval(schedule, 40);
-    if (track) { step = 0; nextT = ac.currentTime + 0.05; }
-  }
-  function setOn(v) {
-    soundOn = v;
-    if (master) master.gain.setTargetAtTime(v ? 0.55 : 0, ac.currentTime, 0.02);
-  }
-
-  // ---------- voices ----------
-  function env(g, t, a, peak, dur) {
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(peak, t + a);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  }
-  function tone(f0, f1, t, dur, vol, type = 'square', bus = sfxBus, attack = 0.004) {
-    const o = ac.createOscillator(), g = ac.createGain();
-    o.type = type; o.frequency.setValueAtTime(f0, t);
-    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
-    env(g, t, attack, vol, dur);
-    o.connect(g).connect(bus); o.start(t); o.stop(t + dur + 0.05);
-  }
-  function hiss(t, dur, vol, f0 = 3000, f1 = 300, type = 'lowpass', bus = sfxBus, q = 1) {
-    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
-    s.buffer = noise; s.loop = true; f.type = type; f.Q.value = q;
-    f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
-    env(g, t, 0.004, vol, dur);
-    s.connect(f).connect(g).connect(bus); s.start(t, Math.random()); s.stop(t + dur + 0.05);
-  }
-  const leadType = speaker ? 'square' : 'triangle';
-  function lead(f, t, dur, vol) {
-    if (speaker) { tone(f, f, t, dur, vol * 0.7, 'square', musicBus, 0.003); return; }
-    tone(f, f, t, dur, vol, 'triangle', musicBus, 0.01);
-    tone(f * 1.004, f * 1.004, t, dur, vol * 0.35, 'sine', musicBus, 0.02);
-  }
-
-  // ---------- music ----------
-  function music(name) {
-    if (name === trackName) return;
-    trackName = name; track = name ? TRACKS[name] : null; step = 0;
-    if (ac) nextT = ac.currentTime + 0.08;
-  }
-  function schedule() {
-    if (!ac || !track) return;
-    const dt = 60 / track.bpm / 4;
-    while (nextT < ac.currentTime + 0.2) {
-      playStep(track, step, nextT, dt);
-      step++; nextT += dt;
-    }
-  }
-  function playStep(tr, i, t, dt) {
-    const s = i % 16, [root, kind] = tr.chords[Math.floor(i / 16) % tr.chords.length], ch = CH[kind];
-    if (tr.bass[s] === 'x') {
-      const n = root - 12 + (tr.oompah && s % 8 === 4 ? 7 : 0); // oom-pah: root, fifth
-      tone(midi(n), midi(n), t, dt * 1.7, speaker ? 0.1 : 0.16, speaker ? 'square' : 'triangle', musicBus, 0.005);
-    }
-    if (tr.pad && s === 0 && !speaker) ch.forEach(c => tone(midi(root + 12 + c), midi(root + 12 + c), t, dt * 15, 0.025, 'sine', musicBus, 0.25));
-    if ((tr.arp || speaker) && s % 2 === 1 && !tr.lead[i % tr.lead.length]) {
-      const c = ch[((i - 1) / 2) % ch.length];
-      tone(midi(root + 24 + c), midi(root + 24 + c), t, dt * 0.9, speaker ? 0.03 : 0.035, speaker ? 'square' : 'sine', musicBus);
-    }
-    const n = tr.lead[i % tr.lead.length];
-    if (n > 0) {
-      let hold = 1;
-      while (tr.lead[(i + hold) % tr.lead.length] === -1) hold++;
-      lead(midi(n), t, dt * (hold + 0.6), 0.09);
-    }
-    const d = tr.drums[s];
-    if (d === 'k') tone(speaker ? 120 : 140, 40, t, 0.1, speaker ? 0.12 : 0.28, speaker ? 'square' : 'sine', musicBus);
-    if (d === 's') hiss(t, 0.09, speaker ? 0.05 : 0.11, 5000, 1200, 'bandpass', musicBus, 0.8);
-    if (d === 'h') hiss(t, 0.025, speaker ? 0.02 : 0.035, 9000, 7000, 'highpass', musicBus);
-  }
-  function jingle(name, t) {
-    const J = JINGLE[name];
-    let at = t;
-    for (const [n, len] of J.notes) {
-      if (n) { tone(midi(n), midi(n), at, J.dt * len + 0.04, 0.08, leadType, sfxBus, 0.005); if (!speaker) tone(midi(n + 12), midi(n + 12), at, J.dt * len, 0.02, 'sine', sfxBus); }
-      at += J.dt * len;
-    }
-  }
-
-  // ---------- effects ----------
-  const SFX = {
-    pour: t => { if (t - lastPour < 0.1) return; lastPour = t; hiss(t, 0.5, 0.07, 700, 1600, 'bandpass', sfxBus, 4); for (let k = 0; k < 4; k++) tone(500 + k * 140, 900 + k * 160, t + k * 0.11, 0.05, 0.02, 'sine'); },
-    brim: t => tone(1320, 1320, t, 0.08, 0.05, leadType),
-    slide: (t, e) => { hiss(t, 0.28, 0.12, 2200, 500, 'bandpass', sfxBus, 1.5); if (e?.perfect) [1568, 1976, 2349].forEach((f, k) => tone(f, f, t + 0.04 + k * 0.05, 0.08, 0.035, leadType)); },
-    catch: t => { tone(1800, 1700, t, 0.05, 0.05, 'triangle'); tone(2400, 2300, t + 0.02, 0.05, 0.03, 'triangle'); },
-    out: t => { tone(880, 880, t, 0.12, 0.05, leadType); tone(660, 660, t + 0.12, 0.2, 0.05, leadType); },
-    sip: t => hiss(t, 0.12, 0.03, 600, 300, 'bandpass', sfxBus, 3),
-    return: t => hiss(t, 0.35, 0.05, 900, 400, 'bandpass', sfxBus, 2),
-    collect: t => { tone(1400, 1400, t, 0.04, 0.05, 'triangle'); tone(2100, 2100, t + 0.04, 0.06, 0.04, 'triangle'); },
-    tipdrop: t => tone(2600, 2400, t, 0.05, 0.03, 'triangle'),
-    tip: t => [1760, 2217, 2637].forEach((f, k) => tone(f, f, t + k * 0.05, 0.12, 0.045, 'triangle')),
-    show: t => jingle('show', t),
-    hop: t => tone(420, 640, t, 0.04, 0.025, leadType),
-    putdown: t => tone(300, 200, t, 0.05, 0.03, 'triangle'),
-    spill: t => { hiss(t, 0.4, 0.14, 1800, 200, 'lowpass'); tone(300, 120, t, 0.25, 0.04, leadType); },
-    enter: t => tone(1200, 1000, t, 0.03, 0.012, 'triangle'),
-    tipgone: t => tone(500, 300, t, 0.1, 0.02, 'triangle'),
-    miss: (t, e) => {
-      if (e?.cause === 'grab') { tone(220, 110, t, 0.5, 0.08, 'sawtooth'); tone(233, 116, t, 0.5, 0.05, 'square'); }
-      else { hiss(t, 0.5, 0.25, 8000, 1500, 'highpass'); for (let k = 0; k < 5; k++) tone(2000 + k * 450, 1600 + k * 300, t + k * 0.03, 0.06, 0.03, 'triangle'); }
+  return createSynth({
+    on, seed: 11, tracks: TRACKS,
+    levels: { master: 0.55, music: speaker ? 0.22 : 0.3, sfx: 0.7 },
+    // a short slap-back echo on the music
+    echo: !speaker && { time: 0.19, feedback: 0.28, wet: 0.22 },
+    arrange: v => {
+      const { tone } = v;
+      // every noise burst sets its filter's Q
+      const hiss = (t, dur, vol, f0, f1, type, bus, q = 1) => v.hiss(t, dur, vol, f0, f1, type, bus, q);
+      const leadType = speaker ? 'square' : 'triangle';
+      function lead(f, t, dur, vol) {
+        if (speaker) { tone(f, f, t, dur, vol * 0.7, 'square', 'music', 0.003); return; }
+        tone(f, f, t, dur, vol, 'triangle', 'music', 0.01);
+        tone(f * 1.004, f * 1.004, t, dur, vol * 0.35, 'sine', 'music', 0.02);
+      }
+      function jingle(name, t) {
+        const J = JINGLE[name];
+        let at = t;
+        for (const [n, len] of J.notes) {
+          if (n) { tone(midi(n), midi(n), at, J.dt * len + 0.04, 0.08, leadType, 'sfx', 0.005); if (!speaker) tone(midi(n + 12), midi(n + 12), at, J.dt * len, 0.02, 'sine', 'sfx'); }
+          at += J.dt * len;
+        }
+      }
+      let lastPour = 0;
+      return {
+        step(tr, i, t, dt) {
+          const s = i % 16, [root, kind] = tr.chords[Math.floor(i / 16) % tr.chords.length], ch = CH[kind];
+          if (tr.bass[s] === 'x') {
+            const n = root - 12 + (tr.oompah && s % 8 === 4 ? 7 : 0); // oom-pah: root, fifth
+            tone(midi(n), midi(n), t, dt * 1.7, speaker ? 0.1 : 0.16, speaker ? 'square' : 'triangle', 'music', 0.005);
+          }
+          if (tr.pad && s === 0 && !speaker) ch.forEach(c => tone(midi(root + 12 + c), midi(root + 12 + c), t, dt * 15, 0.025, 'sine', 'music', 0.25));
+          if ((tr.arp || speaker) && s % 2 === 1 && !tr.lead[i % tr.lead.length]) {
+            const c = ch[((i - 1) / 2) % ch.length];
+            tone(midi(root + 24 + c), midi(root + 24 + c), t, dt * 0.9, speaker ? 0.03 : 0.035, speaker ? 'square' : 'sine', 'music');
+          }
+          const n = tr.lead[i % tr.lead.length];
+          if (n > 0) lead(midi(n), t, dt * (span(tr.lead, i) + 0.6), 0.09);
+          const d = tr.drums[s];
+          if (d === 'k') tone(speaker ? 120 : 140, 40, t, 0.1, speaker ? 0.12 : 0.28, speaker ? 'square' : 'sine', 'music');
+          if (d === 's') hiss(t, 0.09, speaker ? 0.05 : 0.11, 5000, 1200, 'bandpass', 'music', 0.8);
+          if (d === 'h') hiss(t, 0.025, speaker ? 0.02 : 0.035, 9000, 7000, 'highpass', 'music');
+        },
+        effects: {
+          pour: t => { if (t - lastPour < 0.1) return; lastPour = t; hiss(t, 0.5, 0.07, 700, 1600, 'bandpass', 'sfx', 4); for (let k = 0; k < 4; k++) tone(500 + k * 140, 900 + k * 160, t + k * 0.11, 0.05, 0.02, 'sine'); },
+          brim: t => tone(1320, 1320, t, 0.08, 0.05, leadType),
+          slide: (t, e) => { hiss(t, 0.28, 0.12, 2200, 500, 'bandpass', 'sfx', 1.5); if (e?.perfect) [1568, 1976, 2349].forEach((f, k) => tone(f, f, t + 0.04 + k * 0.05, 0.08, 0.035, leadType)); },
+          catch: t => { tone(1800, 1700, t, 0.05, 0.05, 'triangle'); tone(2400, 2300, t + 0.02, 0.05, 0.03, 'triangle'); },
+          out: t => { tone(880, 880, t, 0.12, 0.05, leadType); tone(660, 660, t + 0.12, 0.2, 0.05, leadType); },
+          sip: t => hiss(t, 0.12, 0.03, 600, 300, 'bandpass', 'sfx', 3),
+          return: t => hiss(t, 0.35, 0.05, 900, 400, 'bandpass', 'sfx', 2),
+          collect: t => { tone(1400, 1400, t, 0.04, 0.05, 'triangle'); tone(2100, 2100, t + 0.04, 0.06, 0.04, 'triangle'); },
+          tipdrop: t => tone(2600, 2400, t, 0.05, 0.03, 'triangle'),
+          tip: t => [1760, 2217, 2637].forEach((f, k) => tone(f, f, t + k * 0.05, 0.12, 0.045, 'triangle')),
+          show: t => jingle('show', t),
+          hop: t => tone(420, 640, t, 0.04, 0.025, leadType),
+          putdown: t => tone(300, 200, t, 0.05, 0.03, 'triangle'),
+          spill: t => { hiss(t, 0.4, 0.14, 1800, 200, 'lowpass'); tone(300, 120, t, 0.25, 0.04, leadType); },
+          enter: t => tone(1200, 1000, t, 0.03, 0.012, 'triangle'),
+          tipgone: t => tone(500, 300, t, 0.1, 0.02, 'triangle'),
+          miss: (t, e) => {
+            if (e?.cause === 'grab') { tone(220, 110, t, 0.5, 0.08, 'sawtooth'); tone(233, 116, t, 0.5, 0.05, 'square'); }
+            else { hiss(t, 0.5, 0.25, 8000, 1500, 'highpass'); for (let k = 0; k < 5; k++) tone(2000 + k * 450, 1600 + k * 300, t + k * 0.03, 0.06, 0.03, 'triangle'); }
+          },
+          gameover: t => jingle('gameover', t + 0.3),
+          clear: t => jingle('clear', t),
+          life: t => jingle('life', t),
+          bonus: t => jingle('bonus', t),
+          pad: (t, e) => tone(midi(PADS[e.pad]), midi(PADS[e.pad]), t, 0.26, 0.08, leadType, 'sfx', 0.006),
+          wrong: t => { tone(110, 100, t, 0.5, 0.08, 'sawtooth'); tone(116, 104, t, 0.5, 0.05, 'square'); },
+          round: t => [76, 79, 84].forEach((n, k) => tone(midi(n), midi(n), t + 0.2 + k * 0.07, 0.1, 0.05, leadType)),
+          perfect: t => jingle('perfect', t + 0.2),
+          move: t => tone(600, 600, t, 0.03, 0.03, leadType),
+          select: t => tone(660, 990, t, 0.08, 0.05, leadType),
+        },
+      };
     },
-    gameover: t => jingle('gameover', t + 0.3),
-    clear: t => jingle('clear', t),
-    life: t => jingle('life', t),
-    bonus: t => jingle('bonus', t),
-    pad: (t, e) => tone(midi(PADS[e.pad]), midi(PADS[e.pad]), t, 0.26, 0.08, leadType, sfxBus, 0.006),
-    wrong: t => { tone(110, 100, t, 0.5, 0.08, 'sawtooth'); tone(116, 104, t, 0.5, 0.05, 'square'); },
-    round: t => [76, 79, 84].forEach((n, k) => tone(midi(n), midi(n), t + 0.2 + k * 0.07, 0.1, 0.05, leadType)),
-    perfect: t => jingle('perfect', t + 0.2),
-    move: t => tone(600, 600, t, 0.03, 0.03, leadType),
-    select: t => tone(660, 990, t, 0.08, 0.05, leadType),
-  };
-  function sfx(type, e) {
-    if (!ac || !soundOn || !SFX[type]) return;
-    SFX[type](ac.currentTime + 0.005, e);
-  }
-  function destroy() {
-    clearInterval(timer);
-    if (ac) void ac.close().catch(() => {});
-    ac = null;
-  }
-  return { unlock, setOn, sfx, music, destroy, get on() { return soundOn; } };
+  });
 }

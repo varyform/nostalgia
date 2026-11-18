@@ -5,6 +5,7 @@
 //   const view = createCgaRenderer(canvas, app);
 //   view.events(sim.events, sim);  view.draw(app);  view.hit(x, y, app) → touch target
 import { drawGlyphs, drawPrompt, glyphs, measureGlyphs } from '@nostalgia/input';
+import { fitPixels } from '@nostalgia/game/runtime';
 import { LETTERS } from '../app.js';
 import { ROWS, SHOW_T } from '../sim.js';
 import { VENUES } from '../venues.js';
@@ -32,18 +33,8 @@ export function createCgaRenderer(cv) {
   cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
   g.imageSmoothingEnabled = false;
-  const offs = [];
-  const listen = (t, type, fn) => { t.addEventListener(type, fn); offs.push(() => t.removeEventListener(type, fn)); };
-  // 320 × 200 at 4:3, sized from the window (never from the canvas itself); whole multiples when it fits
-  const fit = () => {
-    let s = Math.min(innerWidth / 320, innerHeight / 240);
-    if (s >= 2) s = Math.floor(s);
-    cv.style.width = Math.floor(320 * s) + 'px';
-    cv.style.height = Math.floor(240 * s) + 'px';
-  };
-  listen(window, 'resize', fit);
-  for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) listen(document, ev, fit);
-  fit();
+  // 320 × 200 at 4:3; whole multiples from twice the size up
+  const unfit = fitPixels(cv, { width: 320, height: 240, snap: 2 });
 
   // palette state: P = current colours, spr(name…) = sprites in them
   let palKey = '', P = PAL.title, spr = buildSprites(P);
@@ -588,5 +579,5 @@ export function createCgaRenderer(cv) {
     return null;
   }
 
-  return { draw, events, hit, destroy() { offs.forEach(f => f()); } };
+  return { draw, events, hit, destroy() { unfit(); } };
 }

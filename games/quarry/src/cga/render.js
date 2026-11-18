@@ -6,6 +6,7 @@
 //   const view = createCgaRenderer(canvas, app);
 //   view.level(sim); view.events(sim.events, sim); view.draw(app);
 import { drawPrompt } from '@nostalgia/input';
+import { fitPixels } from '@nostalgia/game/runtime';
 import { COLS, GOLD_LIFE, ROWS, SCORE, STREAK, U } from '../sim.js';
 import { layout as touchLayout } from '../touch.js';
 import { drawText, textWidth } from './font.js';
@@ -34,17 +35,8 @@ export function createCgaRenderer(cv) {
   cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
   g.imageSmoothingEnabled = false;
-  const offs = [];
-  const listen = (t, type, fn) => { t.addEventListener(type, fn); offs.push(() => t.removeEventListener(type, fn)); };
-  // 320 × 200 at 4:3, a whole multiple when the window allows; sized from the window, never from the canvas
-  const fit = () => {
-    const f = Math.min(innerWidth / 320, innerHeight / 240), s = f >= 1 ? Math.floor(f) : f;
-    cv.style.width = Math.floor(320 * s) + 'px';
-    cv.style.height = Math.floor(240 * s) + 'px';
-  };
-  listen(window, 'resize', fit);
-  for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) listen(document, ev, fit);
-  fit();
+  // 320 × 200 at 4:3, a whole multiple when the window allows
+  const unfit = fitPixels(cv, { width: 320, height: 240, snap: 1 });
 
   const sprites = PALS.map(() => null);
   let P = PALS[0], S = null;
@@ -372,6 +364,6 @@ export function createCgaRenderer(cv) {
     return null;
   }
   function level(sim) { if (sim.s) syncTunnels(sim.s); parts = []; pops = []; }
-  function destroy() { offs.forEach(off => off()); document.body.style.background = ''; }
+  function destroy() { unfit(); document.body.style.background = ''; }
   return { draw, events, level, menuAt, destroy };
 }

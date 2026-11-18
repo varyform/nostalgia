@@ -7,6 +7,7 @@
 //   view.events(sim.events, sim);
 //   view.draw(app);
 import { drawGlyphs, drawPrompt, glyphs, measureGlyphs } from '@nostalgia/input';
+import { fitWide } from '@nostalgia/game/runtime';
 import { COLS, MAP_COLS, ROOMS, ROWS, ZONES, roomAt } from '../world.js';
 import { FORMS, UPGRADES } from '../sim.js';
 import { C, ZONE_PAL } from '../vga/palette.js';
@@ -26,17 +27,12 @@ const clock = s => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(Ma
 
 export function createHdRenderer(cv) {
   const g = cv.getContext('2d');
-  const offs = [];
   let cw = 1, ch = 1, ts = 1, u = 1, vign = null, destroyed = false, lastApp = null;
   const lc = document.createElement('canvas'), lg = lc.getContext('2d');
   let layers = new Map(), backdrops = {}, thumbs = new Map();
   // the largest 16:9 box in the window, at device resolution (capped)
-  function fit() {
-    let w = innerWidth, h = innerHeight;
-    if (w / h > 16 / 9) w = (h * 16) / 9; else h = (w * 9) / 16;
-    const dpr = Math.min(devicePixelRatio || 1, 2, 2560 / w);
-    cv.style.width = Math.round(w) + 'px'; cv.style.height = Math.round(h) + 'px';
-    cw = cv.width = Math.round(w * dpr); ch = cv.height = Math.round(h * dpr);
+  function fit(w, h) {
+    cw = w; ch = h;
     ts = ch / VH; u = ch / 1080;
     lc.width = Math.ceil(cw / 2); lc.height = Math.ceil(ch / 2);
     vign = canvas(cw, ch);
@@ -45,10 +41,7 @@ export function createHdRenderer(cv) {
     v.fillStyle = gr; v.fillRect(0, 0, cw, ch);
     layers = new Map(); backdrops = {}; thumbs = new Map();
   }
-  const listen = (t, type, fn) => { t.addEventListener(type, fn); offs.push(() => t.removeEventListener(type, fn)); };
-  listen(window, 'resize', fit);
-  for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) listen(document, ev, fit);
-  fit();
+  const unfit = fitWide(cv, { onFit: fit });
   // the still demo frame is drawn once; draw it again when the web font arrives
   void document.fonts?.ready.then(() => { if (!destroyed && lastApp) draw(lastApp); });
 
@@ -781,6 +774,6 @@ export function createHdRenderer(cv) {
   return {
     draw,
     events,
-    destroy() { destroyed = true; offs.forEach(f => f()); },
+    destroy() { destroyed = true; unfit(); },
   };
 }

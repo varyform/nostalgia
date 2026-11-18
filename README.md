@@ -44,6 +44,7 @@ selects, A / ✕ runs, and the key hints turn into the pad's buttons.
 | `games/<game>/`   | A game: `game.json`, one HTML page per version, `src/*.js` |
 | `launcher/`       | Launcher source                                            |
 | `packages/input/` | `@nostalgia/input`, the shared input module (below)        |
+| `packages/audio/` | `@nostalgia/audio`, the shared sound engine (below)        |
 | `packages/game/`  | `@nostalgia/game`, the game folder contract (below)        |
 | `dist/`           | Compiled pages, committed: one HTML file per game version  |
 
@@ -89,6 +90,41 @@ makes DOM menus pad-navigable. Pixel-art games pass `style: { pixel: true, … }
 game's bitmap font. The full API is documented in `packages/input/src/index.ts`; `/packages/input/demo.html` shows every
 glyph.
 
+## Shared audio: `@nostalgia/audio`
+
+Each game's `src/audio.js` holds its score: the tracks, how one 16th step is played, and the effects. The engine makes
+the context on the first user gesture, the music and effects buses, a seeded noise buffer, the voices (`tone`, `hiss`,
+`fm`, `notes`) and a look-ahead sequencer. Options give pulse-wave duty cycles, a PC-speaker voicing and a music echo.
+
+```js
+import { createSynth, line, midi, span } from '@nostalgia/audio';
+
+const TRACKS = { title: { bpm: 96, lead: line('69 - 72 . 76 - - . 74 . 72 - 71 . . .') } };
+
+export const createAudio = ({ on = true } = {}) =>
+  createSynth({
+    on,
+    seed: 7,
+    levels: { master: 0.6, music: 0.32, sfx: 0.7 },
+    tracks: TRACKS,
+    arrange: v => ({
+      // one 16th of a track at context time t
+      step(tr, i, t, dt) {
+        const n = tr.lead[i % tr.lead.length];
+        if (n > 0) v.tone(midi(n), midi(n), t, dt * span(tr.lead, i), 0.08, 'triangle', 'music');
+      },
+      effects: { jump: t => v.tone(300, 620, t, 0.09, 0.06) }, // audio.sfx('jump')
+    }),
+  });
+
+audio.unlock(); // from a keydown / pointerdown: makes the context
+audio.music('title');
+audio.sfx('jump', event);
+```
+
+The API is documented in `packages/audio/src/index.ts`; `packages/audio/src/mock.ts` records a run against a fake Web
+Audio for tests.
+
 ## Adding a game
 
 A game is a folder in `games/`; the build and the launcher find it by its `game.json`. Nothing else lists it.
@@ -105,6 +141,9 @@ A game is a folder in `games/`; the build and the launcher find it by its `game.
 - The launcher previews the selected game as `<iframe src="<page>?demo=on&sound=off">`, scaled down into its preview
   box. Run zooms the frame to full size and posts `play`; the page drops the demo and boots the game in place. Leaving
   from the game's title screen posts `exit`, and the launcher zooms back out (the browser's Back button does too).
+- `@nostalgia/game/runtime` has the page plumbing: `listeners()`, the fixed-step `fixedLoop()` (with the still frame
+  for reduced motion), `fitWide()` / `fitPixels()` to size the canvas from the window, `storage()` for saved data,
+  `toggleFullscreen()` and `canvasPoint()`.
 - Each version compiles to one file: `dist/<game>.html`, or `dist/<game>-<version>.html` when there are several.
   `mise run build <game>-<version>` builds one.
 

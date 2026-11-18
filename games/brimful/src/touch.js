@@ -1,12 +1,11 @@
 // Touch: every new touch is a tap (the app asks the renderer what is under it: a counter spot,
 // a menu entry, a bonus pad, the pause button…), and a finger held on the renderer's pour
 // button pours. Positions are canvas pixels.
+import { canvasPoint } from '@nostalgia/game/runtime';
+
 export function createTouch(cv, { listen }) {
   const T = { active: false, pour: false, taps: [], pourIds: new Set(), app: null, update, clear };
-  const pos = t => {
-    const r = cv.getBoundingClientRect();
-    return { x: ((t.clientX - r.left) / r.width) * cv.width, y: ((t.clientY - r.top) / r.height) * cv.height };
-  };
+  const pos = t => canvasPoint(cv, t);
   function onTouch(e) {
     e.preventDefault();
     T.active = true;

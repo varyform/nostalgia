@@ -3,6 +3,8 @@
 // is a "start" (or picks what was tapped, which the app asks the renderer about); on the
 // initials screen a vertical flick of the stick turns the letter. Positions are canvas pixels; `layout()` is shared with
 // the renderers that draw them.
+import { canvasPoint } from '@nostalgia/game/runtime';
+
 export function layout(cw, ch) {
   const u = Math.min(ch / 1080, cw / 1200);
   return {
@@ -19,10 +21,7 @@ export function createTouch(cv, { listen }) {
     update, apply, clear,
   };
   let flicked = false;
-  const pos = t => {
-    const r = cv.getBoundingClientRect();
-    return { x: ((t.clientX - r.left) / r.width) * cv.width, y: ((t.clientY - r.top) / r.height) * cv.height };
-  };
+  const pos = t => canvasPoint(cv, t);
   function onTouch(e) {
     e.preventDefault();
     T.active = true;

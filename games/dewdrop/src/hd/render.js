@@ -8,6 +8,7 @@
 //   view.events(sim.events, sim);
 //   view.draw(app);
 import { drawGlyphs, drawPrompt, glyphs, measureGlyphs } from '@nostalgia/input';
+import { fitWide } from '@nostalgia/game/runtime';
 import { BRUSHES, BRUSH_NAMES, BUTTONS } from '../editor.js';
 import { COLS, ROWS, parseStage } from '../level.js';
 import { MOVER_H } from '../sim.js';
@@ -26,18 +27,12 @@ const ease = t => 1 - (1 - clamp(t, 0, 1)) ** 3;
 
 export function createRenderer(cv) {
   const g = cv.getContext('2d');
-  const offs = [];
   let cw = 1, ch = 1, ts = 1, u = 1, vign = null, destroyed = false, lastApp = null;
   const lc = document.createElement('canvas'), lg = lc.getContext('2d');
   let backdrops = {}, layers = new Map(), thumbs = new Map();
-  // the largest 16:9 box in the window, at device resolution (capped); sized from the window,
-  // never from the canvas itself
-  function fit() {
-    let w = innerWidth, h = innerHeight;
-    if (w / h > 16 / 9) w = (h * 16) / 9; else h = (w * 9) / 16;
-    const dpr = Math.min(devicePixelRatio || 1, 2, 2560 / w);
-    cv.style.width = Math.round(w) + 'px'; cv.style.height = Math.round(h) + 'px';
-    cw = cv.width = Math.round(w * dpr); ch = cv.height = Math.round(h * dpr);
+  // the largest 16:9 box in the window, at device resolution (capped)
+  function fit(w, h) {
+    cw = w; ch = h;
     ts = ch / ROWS; u = ch / 1080;
     lc.width = Math.ceil(cw / 2); lc.height = Math.ceil(ch / 2);
     vign = canvas(cw, ch);
@@ -46,10 +41,7 @@ export function createRenderer(cv) {
     v.fillStyle = gr; v.fillRect(0, 0, cw, ch);
     backdrops = {}; layers = new Map(); thumbs = new Map();
   }
-  const listen = (t, type, fn) => { t.addEventListener(type, fn); offs.push(() => t.removeEventListener(type, fn)); };
-  listen(window, 'resize', fit);
-  for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) listen(document, ev, fit);
-  fit();
+  const unfit = fitWide(cv, { onFit: fit });
   // the still demo frame is drawn once; draw it again when the web font arrives
   void document.fonts?.ready.then(() => { if (!destroyed && lastApp) draw(lastApp); });
 
@@ -705,7 +697,7 @@ export function createRenderer(cv) {
       return i >= 0 ? i : null;
     },
     get world() { return curWorld; },
-    destroy() { destroyed = true; offs.forEach(f => f()); },
+    destroy() { destroyed = true; unfit(); },
   };
 }
 export { FOE_COL };

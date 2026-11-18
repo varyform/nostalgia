@@ -6,6 +6,7 @@
 //   const view = createHdRenderer(canvas, app);
 //   view.events(sim.events, sim);  view.draw(app);  view.hit(x, y, app) → touch target
 import { drawGlyphs, drawPrompt, glyphs, measureGlyphs } from '@nostalgia/input';
+import { fitWide } from '@nostalgia/game/runtime';
 import { LETTERS } from '../app.js';
 import { ROWS, SHOW_T } from '../sim.js';
 import { VENUES } from '../venues.js';
@@ -26,16 +27,11 @@ const POUR = { x: 1790, y: 950, r: 100 }, PAUSE = { x: 1862, y: 48, r: 36 };
 
 export function createHdRenderer(cv) {
   const g = cv.getContext('2d');
-  const offs = [];
   let cw = 1, ch = 1, u = 1, vign = null, destroyed = false, lastApp = null;
   let layers = { key: '', back: null, front: null };
   // the largest 16:9 box in the window, at device resolution (capped)
-  function fit() {
-    let w = innerWidth, h = innerHeight;
-    if (w / h > 16 / 9) w = (h * 16) / 9; else h = (w * 9) / 16;
-    const dpr = Math.min(devicePixelRatio || 1, 2, 2560 / w);
-    cv.style.width = Math.round(w) + 'px'; cv.style.height = Math.round(h) + 'px';
-    cw = cv.width = Math.round(w * dpr); ch = cv.height = Math.round(h * dpr);
+  function fit(w, h) {
+    cw = w; ch = h;
     u = ch / REF_H;
     vign = canvas(cw, ch);
     const v = vign.getContext('2d'), gr = v.createRadialGradient(cw / 2, ch / 2, ch * 0.4, cw / 2, ch / 2, cw * 0.62);
@@ -44,9 +40,6 @@ export function createHdRenderer(cv) {
     layers = { key: '', back: null, front: null };
     if (lastApp) draw(lastApp);
   }
-  const listen = (t, type, fn) => { t.addEventListener(type, fn); offs.push(() => t.removeEventListener(type, fn)); };
-  listen(window, 'resize', fit);
-  for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) listen(document, ev, fit);
   // the still demo frame is drawn once; draw it again when the web font arrives
   void document.fonts?.ready.then(() => { if (!destroyed && lastApp) draw(lastApp); });
 
@@ -577,7 +570,7 @@ export function createHdRenderer(cv) {
     if (app.fade > 0) { g.globalAlpha = Math.min(1, app.fade); g.fillStyle = '#000'; g.fillRect(0, 0, REF_W, REF_H); g.globalAlpha = 1; }
     g.setTransform(1, 0, 0, 1, 0, 0);
   }
-  fit();
+  const unfit = fitWide(cv, { onFit: fit });
 
   // ---------- touch targets (canvas pixels in) ----------
   function hit(px, py, app) {
@@ -617,6 +610,6 @@ export function createHdRenderer(cv) {
     return null;
   }
 
-  return { draw, events, hit, destroy() { destroyed = true; offs.forEach(f => f()); } };
+  return { draw, events, hit, destroy() { destroyed = true; unfit(); } };
 }
 const TOP_Y = rowY(0);

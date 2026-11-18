@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./host": "./src/host.ts",
-    "./node": "./src/node.ts"
+    "./node": "./src/node.ts",
+    "./runtime": "./src/runtime.ts"
   }
 }

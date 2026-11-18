@@ -5,6 +5,7 @@
 //   view.events(sim.events);   // particles and shake from what happened this frame
 //   view.draw(app);            // app = { state, sim, input, … } (see app.js)
 import { drawGlyphs, drawPrompt, glyphs, measureGlyphs } from '@nostalgia/input';
+import { fitPixels } from '@nostalgia/game/runtime';
 import { COLS, MAP_COLS, ROOMS, ROWS, ZONES } from '../world.js';
 import { FORMS, UPGRADES } from '../sim.js';
 import { T, makeBackdrop, paintRoom } from './art.js';
@@ -22,17 +23,8 @@ export function createVgaRenderer(cv) {
   cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
   g.imageSmoothingEnabled = false;
-  const offs = [];
-  const fit = () => {
-    // 320 × 200 shown at 4:3, sized from the window (never from the canvas itself)
-    const s = Math.min(innerWidth / 320, innerHeight / 240);
-    cv.style.width = Math.floor(320 * s) + 'px';
-    cv.style.height = Math.floor(240 * s) + 'px';
-  };
-  addEventListener('resize', fit);
-  offs.push(() => removeEventListener('resize', fit));
-  for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) { document.addEventListener(ev, fit); offs.push(() => document.removeEventListener(ev, fit)); }
-  fit();
+  // 320 × 200 shown at 4:3
+  const unfit = fitPixels(cv, { width: 320, height: 240 });
 
   const backdrops = {};
   const backdrop = z => (backdrops[z] ??= makeBackdrop(z, VIEW_H));
@@ -567,6 +559,6 @@ export function createVgaRenderer(cv) {
   return {
     draw,
     events,
-    destroy() { offs.forEach(f => f()); },
+    destroy() { unfit(); },
   };
 }

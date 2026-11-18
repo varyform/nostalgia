@@ -2,6 +2,8 @@
 // vines and dropping), a jump button on the right, a pause button at the top. Outside play a
 // tap is a "start" (or picks what was tapped, which the app asks the renderer about).
 // Positions are canvas pixels; `layout()` is shared with the renderer that draws them.
+import { canvasPoint } from '@nostalgia/game/runtime';
+
 export function layout(cw, ch) {
   const u = ch / 1080;
   return {
@@ -17,10 +19,7 @@ export function createTouch(cv, { listen }) {
     active: false, stick: null, jump: false, taps: new Set(), tapAt: null, playing: false,
     update, apply, clear,
   };
-  const pos = t => {
-    const r = cv.getBoundingClientRect();
-    return { x: ((t.clientX - r.left) / r.width) * cv.width, y: ((t.clientY - r.top) / r.height) * cv.height };
-  };
+  const pos = t => canvasPoint(cv, t);
   function onTouch(e) {
     e.preventDefault();
     T.active = true;

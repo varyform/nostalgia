@@ -8,6 +8,7 @@
 //   const view = createHdRenderer(canvas, app);
 //   view.level(sim); view.events(sim.events, sim); view.draw(app);
 import { drawGlyphs, drawPrompt, glyphs, measureGlyphs } from '@nostalgia/input';
+import { fitWide } from '@nostalgia/game/runtime';
 import { COLS, GOLD_LIFE, ROWS, SCORE, STREAK, U } from '../sim.js';
 import { layout as touchLayout } from '../touch.js';
 import { TAU, canvas, crateSprite, gemSprite, goldSprite, lightSprite, mix, paintBackdrop, palOf, rgba } from './art.js';
@@ -22,21 +23,14 @@ const pad6 = n => String(Math.max(0, n | 0)).padStart(6, '0');
 
 export function createHdRenderer(cv) {
   const g = cv.getContext('2d');
-  const offs = [];
-  const listen = (t, type, fn) => { t.addEventListener(type, fn); offs.push(() => t.removeEventListener(type, fn)); };
   let cw = 1, ch = 1, u = 1, ts = 1, F = { x: 0, y: 0, ts: 1 }, destroyed = false, lastApp = null;
   let bg = null, bgKey = '', tun = null, tg = null, seen = null, tunKey = '', vign = null;
   let dark = null, dg = null, gem = null, gemKey = '', crate = null, gold = null;
   const LIGHT = lightSprite(128);
 
-  // the largest 16:9 box in the window at device resolution (capped); sized from the window,
-  // never from the canvas itself
-  function fit() {
-    let w = innerWidth, h = innerHeight;
-    if (w / h > 16 / 9) w = (h * 16) / 9; else h = (w * 9) / 16;
-    const dpr = Math.min(devicePixelRatio || 1, 2, 2560 / w);
-    cv.style.width = Math.round(w) + 'px'; cv.style.height = Math.round(h) + 'px';
-    cw = cv.width = Math.round(w * dpr); ch = cv.height = Math.round(h * dpr);
+  // the largest 16:9 box in the window at device resolution (capped)
+  function fit(w, h) {
+    cw = w; ch = h;
     u = ch / 1080; ts = ch / 11.75;
     F = { x: (cw - COLS * ts) / 2, y: ch - ROWS * ts - ts * 0.2, ts };
     bgKey = ''; tunKey = ''; gemKey = '';
@@ -47,9 +41,7 @@ export function createHdRenderer(cv) {
     gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,0.45)');
     v.fillStyle = gr; v.fillRect(0, 0, cw, ch);
   }
-  listen(window, 'resize', fit);
-  for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) listen(document, ev, fit);
-  fit();
+  const unfit = fitWide(cv, { onFit: fit });
   // a still demo frame is drawn once; draw it again when the web fonts arrive
   void document.fonts?.ready.then(() => { if (!destroyed && lastApp) draw(lastApp); });
 
@@ -543,6 +535,6 @@ export function createHdRenderer(cv) {
     return i < 0 ? null : i;
   }
   function level(sim) { if (sim.s) syncLayers(sim.s); parts = []; pops = []; ring = []; squash.clear(); }
-  function destroy() { destroyed = true; offs.forEach(off => off()); }
+  function destroy() { destroyed = true; unfit(); }
   return { draw, events, level, menuAt, destroy };
 }

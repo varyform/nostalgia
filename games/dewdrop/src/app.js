@@ -2,6 +2,7 @@
 // pause, stage clear, game over and continue, ending, editor), the attract-mode demo, sound,
 // touch controls and the saved progress. It never draws: the renderer (hd/render.js) reads
 // this `app` object every frame.
+import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import meta from '../game.json';
 import { createAudio } from './audio.js';
@@ -18,8 +19,7 @@ const LIVES = 3;
 const PLAY_KEYS = ['left', 'right', 'up', 'down', 'jump'];
 
 export function boot(cv, { demo = false, reducedMotion = false, sound = true, onExit = null, renderer = null, start = null } = {}) {
-  const offs = [];
-  const listen = (t, type, fn, opts) => { t.addEventListener(type, fn, opts); offs.push(() => t.removeEventListener(type, fn, opts)); };
+  const { listen, offAll } = listeners();
 
   const input = createInput({
     ...meta.input,
@@ -31,14 +31,9 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   const audio = demo ? null : createAudio({ on: sound });
 
   // ---------- saved progress (never touched by the demo) ----------
-  let save = { unlocked: 0, best: {}, custom: [] };
-  if (!demo) {
-    try { save = { ...save, ...JSON.parse(localStorage.getItem(SAVE_KEY) ?? '{}') }; } catch { /* private mode */ }
-  }
-  function store() {
-    if (demo) return;
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch { /* storage blocked */ }
-  }
+  const saved = storage(SAVE_KEY, { enabled: !demo });
+  const save = { unlocked: 0, best: {}, custom: [], ...saved.load({}) };
+  const store = () => saved.save(save);
 
   const app = {
     state: demo ? 'play' : 'title', stT: 0, t: 0, fade: demo ? 1 : 0,
@@ -54,11 +49,6 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   function setState(s) { app.state = s; app.stT = 0; }
 
   // ---------- page plumbing (not in the demo) ----------
-  function toggleFullscreen() {
-    const d = document;
-    if (d.fullscreenElement) { void d.exitFullscreen().catch(() => {}); return; }
-    void d.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});
-  }
   if (!demo) {
     const unlock = () => audio.unlock();
     listen(window, 'keydown', unlock);
@@ -238,19 +228,13 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   }
 
   // ---------- loop ----------
-  let last = performance.now(), acc = 0, raf = 0, stopped = false;
-  function frame(now) {
-    acc += Math.min(0.1, (now - last) / 1000); last = now;
-    while (acc >= DT) {
-      update();
-      view.events(sim.events, sim);
-      sound();
-      sim.events.length = 0;
-      acc -= DT;
-    }
-    view.draw(app);
-    if (!stopped) raf = requestAnimationFrame(frame);
+  function tick() {
+    update();
+    view.events(sim.events, sim);
+    sound();
+    sim.events.length = 0;
   }
+  const loop = fixedLoop({ dt: DT, step: tick, draw: () => view.draw(app) });
   if (demo) {
     demoLoad();
     // a still demo shows the stage a few seconds in
@@ -260,17 +244,15 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   } else {
     loadStage(Math.min(save.unlocked, STAGES.length - 1), { fresh: true }); // a backdrop for the title
   }
-  if (demo && reducedMotion) {
-    const still = () => view.draw(app);
-    still();
-    listen(window, 'resize', still);
-  } else raf = requestAnimationFrame(frame);
+  if (demo && reducedMotion) loop.still();
+  else loop.start();
 
+  let stopped = false;
   function stop() {
     if (stopped) return;
     stopped = true;
-    cancelAnimationFrame(raf);
-    offs.forEach(off => off());
+    loop.stop();
+    offAll();
     input.destroy();
     view.destroy();
     audio?.destroy();

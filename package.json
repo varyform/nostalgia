@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@nostalgia/audio": "workspace:*",
     "@nostalgia/game": "workspace:*",
     "@nostalgia/input": "workspace:*"
   },

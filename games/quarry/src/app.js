@@ -2,6 +2,7 @@
 // initials for the score table), the attract-mode demo, sound, touch and the saved scores.
 // It never draws: a renderer (cga/render.js or hd/render.js) reads this `app` object every
 // frame and implements { draw(app), events(list, sim), destroy() }.
+import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import meta from '../game.json';
 import { createAudio } from './audio.js';
@@ -20,8 +21,7 @@ const DEFAULT_TABLE = [
 const DIRS = [['right', RIGHT], ['down', DOWN], ['left', LEFT], ['up', UP]];
 
 export function boot(cv, { demo = false, reducedMotion = false, sound = true, onExit = null, renderer, speaker = false, start = null } = {}) {
-  const offs = [];
-  const listen = (t, type, fn, opts) => { t.addEventListener(type, fn, opts); offs.push(() => t.removeEventListener(type, fn, opts)); };
+  const { listen, offAll } = listeners();
 
   const input = createInput({
     ...meta.input,
@@ -33,17 +33,11 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   const audio = demo ? null : createAudio({ on: sound, speaker });
 
   // ---------- the score table (never touched by the demo) ----------
+  const saved = storage(SAVE_KEY, { enabled: !demo });
   let save = { table: DEFAULT_TABLE.map(e => ({ ...e })), last: 'AAA' };
-  if (!demo) {
-    try {
-      const got = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null');
-      if (got && Array.isArray(got.table)) save = { table: got.table.slice(0, TABLE), last: typeof got.last === 'string' ? got.last : 'AAA' };
-    } catch { /* private mode */ }
-  }
-  function store() {
-    if (demo) return;
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch { /* storage blocked */ }
-  }
+  const got = saved.load(null);
+  if (got && Array.isArray(got.table)) save = { table: got.table.slice(0, TABLE), last: typeof got.last === 'string' ? got.last : 'AAA' };
+  const store = () => saved.save(save);
   const qualifies = score => score > 0 && (save.table.length < TABLE || score > save.table[save.table.length - 1].s);
 
   const app = {
@@ -58,11 +52,6 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   function setState(s) { app.state = s; app.stT = 0; }
 
   // ---------- page plumbing (not in the demo) ----------
-  function toggleFullscreen() {
-    const d = document;
-    if (d.fullscreenElement) { void d.exitFullscreen().catch(() => {}); return; }
-    void d.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});
-  }
   let typed = [];
   if (!demo) {
     const unlock = () => audio.unlock();
@@ -204,20 +193,14 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   }
 
   // ---------- loop ----------
-  let last = performance.now(), acc = 0, raf = 0, stopped = false;
-  function frame(now) {
-    acc += Math.min(0.1, (now - last) / 1000); last = now;
-    while (acc >= DT) {
-      update();
-      if (sim.s && sim.s.loadId !== lastLoad) { lastLoad = sim.s.loadId; view.level?.(sim); }
-      view.events(sim.events, sim);
-      sound();
-      sim.events.length = 0;
-      acc -= DT;
-    }
-    view.draw(app);
-    if (!stopped) raf = requestAnimationFrame(frame);
+  function tick() {
+    update();
+    if (sim.s && sim.s.loadId !== lastLoad) { lastLoad = sim.s.loadId; view.level?.(sim); }
+    view.events(sim.events, sim);
+    sound();
+    sim.events.length = 0;
   }
+  const loop = fixedLoop({ dt: DT, step: tick, draw: () => view.draw(app) });
   if (demo) {
     demoLoad();
     // a still demo shows the level a few seconds in
@@ -229,17 +212,15 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   }
   lastLoad = sim.s.loadId;
   view.level?.(sim);
-  if (demo && reducedMotion) {
-    const still = () => view.draw(app);
-    still();
-    listen(window, 'resize', still);
-  } else raf = requestAnimationFrame(frame);
+  if (demo && reducedMotion) loop.still();
+  else loop.start();
 
+  let stopped = false;
   function stop() {
     if (stopped) return;
     stopped = true;
-    cancelAnimationFrame(raf);
-    offs.forEach(off => off());
+    loop.stop();
+    offAll();
     input.destroy();
     view.destroy();
     audio?.destroy();
