@@ -9,6 +9,7 @@
   "facts": [
     ["Zones", "Slag Pits, Coolant Works, Core Spire"],
     ["Forms", "Android, Raptor, Tank"],
+    ["Autosave", "At the start of each zone"],
     ["Input", "Keyboard, gamepad"]
   ],
   "input": {

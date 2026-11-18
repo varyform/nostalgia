@@ -1,9 +1,10 @@
 // The game session: input → Clink's input, the screen flow (title with tower select, play,
-// pause, game over, initials for the score table), the attract-mode demo, sound, touch and
-// the saved scores. It never draws: the renderer (hd/render.js) reads this `app` object every
+// pause, game over, initials for the score table), the attract-mode demo, sound, touch, the
+// saved scores and the autosave behind the title's CONTINUE. It never draws: the renderer (hd/render.js) reads this `app` object every
 // frame and implements { draw(app), events(list, sim), destroy() }, plus menuAt() for taps.
 import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
+import { createAutosave } from '@nostalgia/save';
 import meta from '../game.json';
 import { createAudio } from './audio.js';
 import { createRoutePilot } from './pilot.js';
@@ -45,18 +46,28 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
       reached: Math.max(0, Math.min(TOWERS.length - 1, got.reached | 0)),
     };
   const store = () => saved.save(save);
+  // the checkpoint: the tower being climbed, as it stood when its climb began
+  const autosave = createAutosave('spindle', { enabled: !demo, version: 1 });
   const qualifies = score => score > 0 && (save.table.length < TABLE || score > save.table[save.table.length - 1].s);
 
   const app = {
     state: demo ? 'play' : 'title', stT: 0, t: 0, fade: demo ? 1 : 0,
-    sim, input, demo, onExit, save, menu: 0, page: 0, pageT: 0, rank: -1, pick: 0,
+    sim, input, demo, onExit, save, menu: 0, saved: autosave.load(), page: 0, pageT: 0, rank: -1, pick: 0,
     entry: { letters: [0, 0, 0], pos: 0 }, touch: null, towers: TOWERS,
     get soundOn() { return audio ? audio.on : false; },
     get hi() { return Math.max(save.table[0]?.s ?? 0, sim.s?.score ?? 0); },
-    items: () => ['play', ...(save.reached > 0 ? ['tower'] : []), ...(onExit ? ['exit'] : [])],
+    items: () => [...(app.saved ? ['continue'] : []), 'play', ...(save.reached > 0 ? ['tower'] : []), ...(onExit ? ['exit'] : [])],
   };
   const view = renderer(cv, app);
-  function setState(s) { app.state = s; app.stT = 0; }
+  function setState(s) {
+    // back on the title: CONTINUE comes and goes with the checkpoint, and a new one is picked first
+    if (s === 'title' && app.state !== 'title') {
+      const was = app.saved?.at;
+      app.saved = autosave.load();
+      if (app.saved?.at !== was) app.menu = 0;
+    }
+    app.state = s; app.stT = 0;
+  }
 
   // ---------- page plumbing (not in the demo) ----------
   let typed = false;
@@ -92,6 +103,18 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   // ---------- the game ----------
   function newGame(tower) {
     sim.newGame({ tower, seed: (Math.random() * 1e9) | 0, lives: 3 });
+    checkpoint();
+  }
+  // taken as each tower's climb begins (a new game, and after every Kite Run)
+  function checkpoint() {
+    const { tower, loop, score, lives, nextLife, rng, reached, best } = sim.s;
+    const n = tower + 1 + loop * TOWERS.length;
+    autosave.save({ tower, loop, score, lives, nextLife, rng, reached, best }, `Tower ${n} · ${score.toLocaleString('en-US')}`);
+  }
+  function resume(c) {
+    const tower = Math.min(TOWERS.length - 1, Math.max(0, c.tower | 0)), score = Math.max(0, c.score | 0);
+    sim.newGame({ tower, seed: c.rng | 0, lives: Math.max(1, c.lives | 0), loop: Math.max(0, c.loop | 0) });
+    Object.assign(sim.s, { score, nextLife: Math.max(score + 1, c.nextLife | 0), reached: Math.max(sim.s.reached, c.reached | 0), best: c.best | 0 });
   }
   function gameOver() {
     if (qualifies(sim.s.score)) {
@@ -174,7 +197,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         if (go) {
           const cur = items[app.menu];
           audio.sfx('select');
-          if (cur === 'play' || cur === 'tower') { newGame(cur === 'tower' ? app.pick : 0); setState('play'); }
+          if (cur === 'continue') { resume(app.saved.state); setState('play'); }
+          else if (cur === 'play' || cur === 'tower') { newGame(cur === 'tower' ? app.pick : 0); setState('play'); }
           else if (cur === 'exit') onExit?.();
         } else if (onExit && hit('quit')) onExit();
         // the right-hand page turns by itself: how to play ⇄ the best climbers
@@ -185,11 +209,15 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         if (hit('pause') || app.touch?.taps.has('pause')) { setState('pause'); break; }
         sim.step(controls());
         if (sim.events.some(e => e.type === 'tower' || e.type === 'go')) noteReached();
+        if (sim.events.some(e => e.type === 'tower')) checkpoint();
+        if (sim.events.some(e => e.type === 'over')) autosave.clear(); // the last life: the run is over
         if (sim.s.status === 'over' && sim.s.statusT > 3) gameOver();
         break;
       case 'pause':
         if (hit('pause') || hit('back') || hit('start') || app.touch?.taps.has('start')) setState('play');
-        else if (hit('quit')) { if (qualifies(sim.s.score)) gameOver(); else toScores(-1); }
+        // the run isn't over: its checkpoint stays for CONTINUE, so the score goes to the table
+        // when the run ends, not here as well (a quit then continued run would be entered twice)
+        else if (hit('quit')) toScores(-1);
         break;
       case 'entry':
         entryStep();

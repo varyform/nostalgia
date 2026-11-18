@@ -7,6 +7,7 @@
 //   view.events(sim.events, sim);  view.draw(app);  view.hit(x, y, app) → touch target
 import { drawGlyphs, drawPrompt, glyphs, measureGlyphs } from '@nostalgia/input';
 import { fitWide } from '@nostalgia/game/runtime';
+import { savedAgo } from '@nostalgia/save';
 import { LETTERS } from '../app.js';
 import { ROWS, SHOW_T } from '../sim.js';
 import { VENUES } from '../venues.js';
@@ -394,11 +395,15 @@ export function createHdRenderer(cv) {
     g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(-300, -112, 600, 6);
     g.restore(); g.textAlign = 'left';
     label('A SODA FOUNTAIN FRENZY', lx, 320, 32, '#ffe1c2', 700, 'center', 8);
-    const items = app.titleItems(), names = { play: 'PLAY', scores: 'HIGH SCORES', exit: 'EXIT' };
+    const items = app.titleItems(), names = { continue: 'CONTINUE', play: 'PLAY', scores: 'HIGH SCORES', exit: 'EXIT' };
     menuRects(app).forEach((m, i) => {
-      const on = i === app.menu;
+      const on = i === app.menu, it = items[i], col = on ? '#ffffff' : 'rgba(255,255,255,0.6)';
       if (on) { panel(m.x, m.y, m.w, m.h, 30, 0.6); glow(g, '#ff7aa6', m.x + 34, m.y + m.h / 2, 30, 0.9); }
-      label(names[items[i]], lx, m.y + m.h * 0.72, on ? 40 : 32, on ? '#ffffff' : 'rgba(255,255,255,0.6)', 800, 'center', 4);
+      if (it === 'continue') {
+        // the checkpoint under its entry: where it stands and how long ago
+        label('CONTINUE', lx, m.y + 36, on ? 32 : 28, col, 800, 'center', 4);
+        label(`${app.saved.label} · ${savedAgo(app.saved.at)}`, lx, m.y + 57, 19, on ? '#ffe1c2' : 'rgba(255,255,255,0.5)', 700, 'center', 1);
+      } else label(names[it], lx, m.y + m.h * 0.72, on ? 40 : 32, col, 800, 'center', 4);
     });
     const input = app.input, kb = input.device.kind === 'keyboard';
     const extra = [['pause', 'PAUSE']];

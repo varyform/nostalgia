@@ -67,7 +67,7 @@ export function createSim() {
     lives: 3, score: 0, deaths: 0, kills: 0,
     message: null, // { text, t }  upgrade / hint banners
     boss: null,
-    newGame, startAt, step, retryRoom, roomMem, tileAt,
+    newGame, startAt, resume, step, retryRoom, roomMem, tileAt,
   };
   const ev = (type, x = 0, y = 0, extra) => s.events.push({ type, x, y, ...extra });
   let prevIn = NO_INPUT;
@@ -944,6 +944,19 @@ export function createSim() {
     enter(id, x, y, 'android');
     if (c?.[0] === 'check') s.check = { room: id, i: def.ents.indexOf(c), x: c[1] + 0.75, y: c[2] + 1 };
     s.status = 'play';
+  }
+  // continue from an autosave checkpoint: the zone's first room as a fresh arrival, with the
+  // run so far carried in; the zones below count as cleared (bosses down, their doors open)
+  function resume({ room, ups, score, lives, t = 0, deaths = 0, kills = 0 }) {
+    startAt(room, ups);
+    Object.assign(s, { score, lives, t, deaths, kills });
+    const zone = roomById(room).zone;
+    for (const def of ROOMS) {
+      if (def.zone >= zone) continue;
+      const m = roomMem(def.id), boss = def.ents.find(e => e[0] === 'boss');
+      m.visited = m.hinted = true;
+      if (boss) { m.bossDead = true; if (boss[3]?.door) m.perm.add(boss[3].door); }
+    }
   }
   function enter(id, footX, footY, form) {
     s.p = makePlayer(form, footX, footY);

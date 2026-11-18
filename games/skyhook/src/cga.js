@@ -1,6 +1,7 @@
 'use strict';
 import { fitPixels, fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput, drawPrompt, glyphs, measureGlyphs, drawGlyphs, measureGlyph, parsePrompt } from '@nostalgia/input';
+import { createAutosave } from '@nostalgia/save';
 import meta from '../game.json';
 import { createAudio } from './audio.js';
 import { createPilot } from './autopilot.js';
@@ -62,6 +63,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     '%':'11000 11001 00010 00100 01000 10011 00011', '+':'00000 00100 00100 11111 00100 00100 00000',
     '=':'00000 00000 11111 00000 11111 00000 00000', '>':'01000 00100 00010 00001 00010 00100 01000',
     '<':'00010 00100 01000 10000 01000 00100 00010', '*':'00000 00100 10101 01110 10101 00100 00000',
+    '·':'00000 00000 00000 01100 01100 00000 00000',
   };
   const FONT = {};
   for (const k in FONT_SRC) FONT[k] = FONT_SRC[k].split(' ').map(r => parseInt(r, 2));
@@ -350,6 +352,15 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   const saved = storage('skyhook-hi'); // the demo shows the high score but never saves one
   hiscore = +saved.load(0) || 0;
   function saveHi() { if (!demo && score > hiscore) { hiscore = score; saved.save(hiscore); } }
+  // the autosave, apart from the high score: a checkpoint where each mission begins, offered as the
+  // title's CONTINUE (menu 0, with NEW GAME as 1). The demo never reads, writes or clears it.
+  const autosave = createAutosave('skyhook-cga', { enabled: !demo, version: 1 });
+  let resume = autosave.load(), menuSel = 0;
+  function saveCheckpoint(m, l) {
+    autosave.save({ mi: m, loop: l, score, lives, nextLife },
+      'MISSION ' + (m + 1) + (l ? ' · TOUR ' + (l + 1) : '') + ' · ' + score.toLocaleString('en-US'));
+    resume = autosave.load();
+  }
 
   const FL = x => { x = x | 0; return lv.fl[x < 0 ? 0 : x >= lv.L ? lv.L - 1 : x]; };
   const CE = x => { if (!lv.hasCeil) return -50; x = x | 0; return lv.ce[x < 0 ? 0 : x >= lv.L ? lv.L - 1 : x]; };
@@ -380,7 +391,14 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   }
 
   function newGame() { score = 0; lives = 3; mi = 0; loop = 0; nextLife = 10000; startMission(); }
+  // the saved mission, begun again as it began
+  function continueGame() {
+    const s = resume.state;
+    score = s.score | 0; lives = s.lives | 0 || 3; mi = clamp(s.mi | 0, 0, MISSIONS.length - 1); loop = s.loop | 0; nextLife = s.nextLife | 0 || 10000;
+    startMission();
+  }
   function startMission() {
+    saveCheckpoint(mi, loop); menuSel = 0;
     diff = 1 + loop * 0.35 + mi * 0.08;
     lv = genLevel(mi);
     checkpoint = lv.pads[0];
@@ -418,9 +436,11 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     const saved = lv.spies.filter(s => s.state === 'saved' || s.state === 'walk').length;
     tally = { saved, total: lv.spies.length, fuelB: Math.round(fuel) * 10, full: saved === lv.spies.length ? 2000 : 0 };
     addScore(tally.fuelB + tally.full);
+    // the next mission's checkpoint already, so closing on the tally keeps this one done
+    if (mi + 1 < MISSIONS.length) saveCheckpoint(mi + 1, loop); else saveCheckpoint(0, loop + 1);
     state = 'clear'; stT = 0; audio.engine(false); audio.sfx('fanfare'); msgs = null;
   }
-  function gameOver() { if (demo) return nextMission(); state = 'over'; stT = 0; saveHi(); audio.sfx('over'); msgs = null; }
+  function gameOver() { if (demo) return nextMission(); autosave.clear(); resume = null; state = 'over'; stT = 0; saveHi(); audio.sfx('over'); msgs = null; }
 
   // ---------- effects ----------
   function explode(x, y, n, big) {
@@ -474,7 +494,11 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     if (hit('sound')) audio.setOn(!audio.on);
     if (hit('palette')) { palIdx = (palIdx + 1) % PALS.length; buildGfx(); }
     T += dt; stT += dt;
-    if (state === 'title') { if (hit('start')) newGame(); else if (onExit && hit('quit')) onExit(); return; }
+    if (state === 'title') {
+      if (resume && (hit('up') || hit('down'))) menuSel ^= 1;
+      if (hit('start')) { if (resume && menuSel === 0) continueGame(); else newGame(); } else if (onExit && hit('quit')) onExit();
+      return;
+    }
     if (state === 'over') { updateFx(dt); if (stT > 1 && hit('start')) state = 'title'; return; }
     if (state === 'clear') {
       updateFx(dt);
@@ -985,8 +1009,14 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     const rows = [[['fly', 'FLY'], ['fire', 'FIRE']], [['bomb', 'BOMB'], ['pause', 'PAUSE']]];
     if (!onPad()) rows.push([['sound', 'SOUND'], ['palette', 'PALETTE']], [['fullscreen', 'FULLSCREEN']]);
     if (onExit) (rows[rows.length - 1].length < 2 ? rows[rows.length - 1] : rows[rows.push([]) - 1]).push(['quit', 'EXIT']);
-    legend(rows, 121 + Math.round((4 - rows.length) * 6.5), 13, 3);
-    if ((T * 2 | 0) % 2) cptext('PRESS {start} TO START', 172, 3);
+    legend(rows, 121 - (resume ? 4 : 0) + Math.round((4 - rows.length) * 6.5), 13, 3);
+    if (resume) {
+      // CONTINUE / NEW GAME: up and down pick, start confirms
+      ['CONTINUE  ' + resume.label, 'NEW GAME'].forEach((s, i) => {
+        const on = i === menuSel, blink = on && (T * 2 | 0) % 2;
+        ctext((blink ? '> ' : '  ') + s + (blink ? ' <' : '  '), 166 + i * 11, on ? 3 : 1);
+      });
+    } else if ((T * 2 | 0) % 2) cptext('PRESS {start} TO START', 172, 3);
     const hs = 'HI ' + pad6(hiscore), so = 'SOUND ' + (audio.on ? 'ON' : 'OFF'), sx = Math.round((W - tw(hs) - 18 - tw(so)) / 2);
     text(hs, sx, 188, 2); text(so, sx + tw(hs) + 18, 188, 1);
   }

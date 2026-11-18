@@ -80,6 +80,8 @@ input-glyph{font-family:var(--mono);font-size:14px;
 h1{font:850 clamp(56px,11vw,128px)/0.88 ui-sans-serif,system-ui,sans-serif;letter-spacing:-.045em;margin:12px 0 10px;
   background:linear-gradient(180deg,var(--ink) 30%,color-mix(in oklch,var(--ink) 45%,var(--accent)));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 6px 24px color-mix(in oklch,black 50%,transparent))}
 .tag{color:var(--muted);font-size:16px;max-width:560px}
+.resume{margin-top:26px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.resume .kicker b{color:var(--ink);font-weight:700}
 .section-h{margin:30px 0 12px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
 .missions{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
 .mcard{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:6px;padding:0 0 16px;border-radius:16px;overflow:hidden;background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(10px);transition:transform .15s,border-color .15s}
@@ -161,6 +163,10 @@ h1{font:850 clamp(56px,11vw,128px)/0.88 ui-sans-serif,system-ui,sans-serif;lette
       <div class="kicker">Solo paratrooper operations</div>
       <h1>DROPZONE</h1>
       <p class="tag">One jump. You're alone behind the line with whatever you dropped from the plane. Get to the objective, then get to the helicopter before it leaves.</p>
+    </div>
+    <div class="resume hidden" id="resume">
+      <button class="btn primary" id="continue">Continue ▸</button>
+      <div class="kicker"><b id="resumeLabel"></b> · <span id="resumeAgo"></span></div>
     </div>
     <div class="section-h">
       <div class="kicker">Select operation</div>

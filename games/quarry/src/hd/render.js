@@ -94,6 +94,13 @@ export function createHdRenderer(cv) {
     if ('letterSpacing' in g) g.letterSpacing = '0px';
     g.textAlign = 'left';
   }
+  function labelW(s, size, { font = BODY, wgt = 700, spacing = 0 } = {}) {
+    g.font = `${font === HEAD ? 400 : wgt} ${Math.round(size * u)}px ${font}`;
+    if ('letterSpacing' in g) g.letterSpacing = spacing * u + 'px';
+    const w = g.measureText(s).width;
+    if ('letterSpacing' in g) g.letterSpacing = '0px';
+    return w;
+  }
   const GST = { font: BODY };
   const prompt = (input, s, x, y, size, col, align = 'center') =>
     drawPrompt(g, input, s, x, y, { font: `600 ${Math.round(size * u)}px ${BODY}`, size: size * 1.35 * u, color: col, align, letterSpacing: 1.2 * u, style: GST });
@@ -424,13 +431,19 @@ export function createHdRenderer(cv) {
     const items = app.items();
     menuBox.length = 0;
     items.forEach((it, k) => {
-      const sel = k === app.menu, yy = y + k * 70 * u, w = 360 * u, h = 56 * u;
+      const cont = it === 'continue', sel = k === app.menu, yy = y + k * (items.length > 2 ? 62 : 70) * u, w = (cont ? 640 : 360) * u, h = 56 * u;
       menuBox.push({ x: cw / 2 - w / 2, y: yy - h / 2, w, h });
       if (sel) {
         g.fillStyle = 'rgba(255,210,74,0.16)'; g.beginPath(); g.roundRect(cw / 2 - w / 2, yy - h / 2, w, h, h / 2); g.fill();
         g.strokeStyle = rgba(GOLD, 0.5 + Math.sin(t * 5) * 0.25); g.lineWidth = 2 * u; g.stroke();
       }
-      label(it === 'play' ? 'PLAY' : 'EXIT', cw / 2, yy + 13 * u, 34, sel ? GOLD : DIM, { font: HEAD, align: 'center', spacing: 3 });
+      if (cont) {
+        // CONTINUE, then the saved level and score and how old it is
+        const name = 'CONTINUE', rest = `   ${app.saved.label}  ·  ${app.savedAgo()}`;
+        const nw = labelW(name, 34, { font: HEAD, spacing: 3 }), rw = labelW(rest, 22, { spacing: 2 }), x0 = cw / 2 - (nw + rw) / 2;
+        label(name, x0, yy + 13 * u, 34, sel ? GOLD : DIM, { font: HEAD, spacing: 3 });
+        label(rest, x0 + nw, yy + 10 * u, 22, sel ? INK : DIM, { spacing: 2 });
+      } else label(it === 'play' ? 'PLAY' : 'EXIT', cw / 2, yy + 13 * u, 34, sel ? GOLD : DIM, { font: HEAD, align: 'center', spacing: 3 });
     });
   }
   function howTo(app, x0, y0, w, t) {
@@ -478,7 +491,7 @@ export function createHdRenderer(cv) {
     const pw = 960 * u, px = cw / 2 - pw / 2, py = 345 * u, ph = 440 * u;
     glass(px, py, pw, ph);
     if (app.page === 0) howTo(app, px, py, pw, t); else scores(app, px, py, pw, t);
-    drawMenu(app, 840 * u, t);
+    drawMenu(app, (app.items().length > 2 ? 830 : 840) * u, t);
     legend(app.input, [[['move', 'Dig'], ['fire', 'Fire'], ['pause', 'Pause'], ['sound', app.soundOn ? 'Sound on' : 'Sound off']]], cw / 2, 1010 * u, 22);
   }
   function drawEntry(app, t) {

@@ -1,9 +1,11 @@
 // The session: input → commands, the screen flow (title, setup, field manual, records, round
 // card, play, gear tray, pause, round summary, shop, final standings), the computer players,
-// the attract run behind the title and the demo, sound, pointer and the saved setup and records.
+// the attract run behind the title and the demo, sound, pointer, the saved setup and records,
+// and the autosave behind the title's CONTINUE.
 // It never draws: the renderer reads this `app` object every frame and answers hit tests.
 import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
+import { createAutosave } from '@nostalgia/save';
 import meta from '../game.json';
 import { aiShop, createBrain } from './ai.js';
 import { createAudio } from './audio.js';
@@ -41,22 +43,32 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   const audio = demo ? null : createAudio({ on: sound });
   const savedSetup = storage(SETUP_KEY, { enabled: !demo });
   const savedRecords = storage(RECORDS_KEY, { enabled: !demo });
+  // the checkpoint: a match between rounds (see checkpoint() below)
+  const autosave = createAutosave('barrage', { enabled: !demo, version: 1 });
 
   const app = {
     state: demo ? 'intro' : 'title', stT: 0, t: 0, fade: demo ? 1 : 0,
-    sim, input, demo, onExit, menu: 0, attract: !demo,
+    sim, input, demo, onExit, menu: 0, attract: !demo, saved: loadCheckpoint(),
     setup: loadSetup(), setupRow: 0, manualPage: 0,
     records: loadRecords(), standings: null, finalMenu: 0, pauseMenu: 0,
     shop: null, tray: { open: false, sel: 0 }, driving: false, banner: null, touch: null, dragId: null,
     colors: COLORS, colorNames: COLOR_NAMES, choices: CHOICES,
     get soundOn() { return audio ? audio.on : false; },
-    titleItems: () => ['play', 'manual', 'records', ...(onExit ? ['exit'] : [])],
+    titleItems: () => [...(app.saved ? ['continue'] : []), 'play', 'manual', 'records', ...(onExit ? ['exit'] : [])],
     setupRows: () => ['count', ...app.setup.players.map((_, i) => 'p' + i), ...SETTINGS, 'start'],
     trayItems: () => trayItems(),
     owned: t => WEAPONS.filter(w => sim.has(t, w.id)),
   };
   const view = renderer(cv, app);
-  function setState(s) { app.state = s; app.stT = 0; }
+  function setState(s) {
+    // back on the title: CONTINUE comes and goes with the checkpoint, and a new one is picked first
+    if (s === 'title' && app.state !== 'title') {
+      const was = app.saved?.at;
+      app.saved = loadCheckpoint();
+      if (app.saved?.at !== was) app.menu = 0;
+    }
+    app.state = s; app.stT = 0;
+  }
 
   // ---------- saved data ----------
   function loadSetup() {
@@ -116,16 +128,48 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
       rounds: 3, wind: 1 + Math.floor(R() * 3), shifting: true, walls: 'random', land: 'mixed', cash: 40000, interest: 5,
     };
   }
-  function startAttract() { app.attract = true; beginMatch(attractSetup()); for (const p of sim.players) aiShop(sim, p.i, R); }
-  function startMatch() {
+  // A checkpoint is the whole match between rounds: the setup (rounds, wind, walls, land, cash,
+  // interest), every player (name, colour, computer level and persona, cash, stock, scores),
+  // how many rounds are done, and the seed the next round's field is drawn from. The match picks
+  // up at that round's shop (or its start, with nothing to buy) exactly as it would have.
+  let shopSeed = 0; // the computers' shopping after a checkpoint comes from its seed too
+  function checkpoint(round) {
+    const c = {
+      setup: sim.setup, round, seed: (shopSeed = (R() * 1e9) | 0),
+      players: sim.players.map(({ name, color, ai, persona, cash, inv, stats }) => ({ name, color, ai, persona, cash, inv, stats })),
+    };
+    autosave.save(c, `Round ${round + 1} of ${c.setup.rounds}`);
+    return c;
+  }
+  function loadCheckpoint() {
+    const s = autosave.load(), c = s?.state;
+    const ok = c && c.setup && Array.isArray(c.setup.players) && Array.isArray(c.players) && c.players.length >= 2 && c.players.length === c.setup.players.length;
+    return ok ? s : null;
+  }
+  // the round after a checkpoint, set up as CONTINUE sets it up
+  function startFrom(c) {
+    shopSeed = c.seed | 0;
+    sim.reseed(c.seed | 0);
+    sim.resumeMatch(c);
+    brain = createBrain(sim, { seed: (R() * 1e9) | 0, speed: brainSpeed() });
+    app.tray = { open: false, sel: 0 }; app.driving = false; app.dragId = null; app.standings = null;
+  }
+  function continueMatch(c) {
     app.attract = false;
-    savedSetup.save(app.setup);
-    beginMatch(app.setup);
-    // with cash to spend, everyone shops before the first round too
-    if (app.setup.cash > 0) openShop(true);
+    startFrom(c);
+    // between rounds there is always a shop; before the first, only with cash to spend
+    if (c.round > 0 || c.setup.cash > 0) openShop(true);
     else { setState('intro'); audio?.sfx('round'); }
   }
-  function autoShop() { for (const p of sim.players) if (p.ai) aiShop(sim, p.i, R); }
+  function startAttract() { app.attract = true; beginMatch(attractSetup()); for (const p of sim.players) aiShop(sim, p.i, R); }
+  function startMatch() {
+    savedSetup.save(app.setup);
+    beginMatch(app.setup);
+    // round 1 starts from the match's first checkpoint, so CONTINUE would start it the same;
+    // with cash to spend, everyone shops before it too
+    continueMatch(checkpoint(0));
+  }
+  function autoShop(rand = R) { for (const p of sim.players) if (p.ai) aiShop(sim, p.i, rand); }
   function nextRound() {
     brain.newRound();
     sim.nextRound();
@@ -327,7 +371,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         if (hit('start') || hit('fire') || m) {
           const it = items[app.menu];
           audio.sfx('select');
-          if (it === 'play') { app.setupRow = 0; setState('setup'); }
+          if (it === 'continue') continueMatch(app.saved.state);
+          else if (it === 'play') { app.setupRow = 0; setState('setup'); }
           else if (it === 'manual') { app.manualPage = 0; setState('manual'); }
           else if (it === 'records') setState('records');
           else if (it === 'exit') onExit?.();
@@ -362,7 +407,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         sim.step({});
         if (app.stT > 0.8 && (hit('start') || hit('fire') || tapList.length)) {
           audio.sfx('select');
-          if (sim.phase === 'match') { app.standings = standings(); saveRecords(); app.finalMenu = 0; setState('final'); audio.sfx('match'); }
+          if (sim.phase === 'match') { app.standings = standings(); saveRecords(); autosave.clear(); app.finalMenu = 0; setState('final'); audio.sfx('match'); }
           else openShop();
         }
         break;
@@ -391,7 +436,11 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     else if (sim.phase === 'aim') sim.step(humanCmd(t));
     else { app.tray.open = false; app.driving = false; app.dragId = null; sim.step({}); }
     if (sim.phase === 'round' || sim.phase === 'match') {
-      if ((hold += DT) > 1.8) { hold = 0; app.standings = standings(); setState('roundEnd'); }
+      if ((hold += DT) > 1.8) {
+        hold = 0; app.standings = standings(); setState('roundEnd');
+        // between rounds: the checkpoint, and the next round's field from its seed, as on CONTINUE
+        if (sim.phase === 'round') sim.reseed(checkpoint(sim.round).seed);
+      }
     }
   }
 
@@ -434,9 +483,14 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   }
 
   function openShop(pre = false) {
-    autoShop();
+    autoShop(rng(shopSeed ^ 0x2545f491));
     const queue = sim.players.filter(p => !p.ai).map(p => p.i);
-    const go = () => { if (pre) { setState('intro'); audio?.sfx('round'); } else nextRound(); };
+    const go = () => {
+      if (!pre) { nextRound(); return; }
+      // the round is already laid out: what it pays is counted from after the shopping
+      for (const p of sim.players) p.roundStart = p.cash;
+      setState('intro'); audio?.sfx('round');
+    };
     if (!queue.length) { go(); return; }
     app.shop = { queue, pi: queue.shift(), sel: 0, col: 0, flash: null, flashT: 0, pre, go };
     setState('shop');

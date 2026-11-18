@@ -5,6 +5,7 @@
 // storage, and the autopilot (autopilot.js) at the controls. onExit returns to the launcher.
 import { listeners, storage } from '@nostalgia/game/runtime';
 import { createInput, menuNav, glyphHTML } from '@nostalgia/input';
+import { createAutosave, savedAgo } from '@nostalgia/save';
 import meta from '../game.json';
 import { createAudio } from './audio.js';
 /* =====================================================================
@@ -445,6 +446,14 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     bullets:[],grenades:[],charges:[],particles:[],flashes:[],emitters:[],pending:[],stats:{},timeLeft:0,objDone:false,anyAlert:false,pVis:1,
     time:0,frame:0,dt:0.016,hurt:0,lastAlertSfx:-9,aaY:H*0.6,flakT:0,sel:0,diffKey:'veteran',diff:DIFFS.veteran,endT:0,paused:false,groundT:0,
     clouds:[],cloudSh:[],view:null,toastT:0};
+  // the autosave, apart from the best scores. Operations are picked from a menu and carry nothing
+  // from one to the next (no lives, no running score), so a checkpoint is the operation about to
+  // begin and its difficulty: saved on deployment and, after a win, as the next operation in order.
+  // The title offers it as CONTINUE. The demo never reads, writes or clears it.
+  const autosave=createAutosave('dropzone',{enabled:!demo,version:1});
+  let resume=autosave.load();
+  function saveCheckpoint(i){const M=MISSIONS[i];autosave.save({op:i,diff:G.diffKey},`${M.code} · ${M.name} · ${DIFFS[G.diffKey].label}`);resume=autosave.load();}
+  function clearCheckpoint(){autosave.clear();resume=null;}
   (()=>{const R=mulberry32(5);for(let i=0;i<70;i++)G.clouds.push({x:-800+R()*(W+1600),y:R()*H,s:220+R()*260});for(let i=0;i<34;i++)G.cloudSh.push({x:R()*(W+1600),y:R()*H,s:380+R()*420});})();
   function baseZoom(){return clamp(Math.min(CW/1350,CH/820),0.5,1.6);}
   function resize(){
@@ -468,7 +477,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
   const padAim=()=>input.device.kind==='gamepad',AIM_D=230;   // pad: aim point this far along the facing
   const SCREENS=['title','brief','pause','end'];
   const menuRoot=()=>SCREENS.map($).find(s=>!s.classList.contains('hidden'));
-  function menuDefault(){const r=menuRoot();return r&&(r.querySelector('.primary')||r.querySelector('.mcard[aria-selected="true"]'));}
+  function menuDefault(){const r=menuRoot();return r&&([...r.querySelectorAll('.primary')].find(e=>!e.closest('.hidden'))||r.querySelector('.mcard[aria-selected="true"]'));}
   function menuFocus(){const r=menuRoot(),a=document.activeElement;return r&&a&&a.classList.contains('pad-focus')&&r.contains(a)?a:null;}
   let nav=null;
   if(dom){
@@ -529,6 +538,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
   }
   function startMission(i,map=true){
     G.sel=i;resetRun();const w=G.world=genWorld(i,G.diffKey,map),M=w.M;G.diff=DIFFS[G.diffKey];
+    saveCheckpoint(i);
     G.plane={x:clamp(w.roadX(H-500)+rr(-200,200),300,W-300),y:H-500,vx:0,speed:250,pods:3,bank:0,prop:0,heading:-Math.PI/2,leaving:false,warned:false,t:0};
     G.state='flight';G.cam.x=G.plane.x;G.cam.y=G.plane.y-140;G.cam.zf=0.45;G.timeLeft=M.time;G.flakT=0;
     if(dom){$('hMission').textContent=`${M.code} · Operation ${M.name}`;
@@ -573,10 +583,15 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
       .map(([k,v])=>`<div>${k}<b>${v}</b></div>`).join('');
     $('eScore').textContent=score.toLocaleString();$('eRank').textContent=rank;
     if(win){const best=storage('dropzone-best-'+G.sel),b=+best.load(0)||0;if(score>b)best.save(score);}
+    // a win checkpoints the next operation; failing, or winning the last one, ends the run
+    if(win&&G.sel+1<MISSIONS.length)saveCheckpoint(G.sel+1);else clearCheckpoint();
     show('end');
   }
   function setPaused(p){G.paused=p;show(p?'pause':null);if(p)playing(false);else if(G.state==='ground')playing(true);}
-  function toTitle(){resetRun();G.state='title';audio.stopLoops();$('hud').classList.add('hidden');playing(false);buildMenu();show('title');}
+  function toTitle(){resetRun();G.state='title';audio.stopLoops();$('hud').classList.add('hidden');playing(false);showTitle();}
+  // the title, with CONTINUE first and selected when there is a checkpoint (Enter / pad South takes it)
+  function showTitle(){buildMenu();show('title');if(resume)padFocus($('continue'));}
+  function continueRun(){const s=resume.state;G.diffKey=DIFFS[s.diff]?s.diff:'veteran';audio.unlock();startMission(clamp(s.op|0,0,MISSIONS.length-1));}
   const playing=on=>{if(dom)document.body.classList.toggle('playing',on);};
   function show(id){if(!dom)return;for(const s of SCREENS)$(s).classList.toggle('hidden',s!==id);padFocus(id&&padAim()?menuDefault():null);}
   const fmtTime=s=>{s=Math.max(0,Math.ceil(s));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');};
@@ -1384,6 +1399,8 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     if(G.frame%2===0)drawMini();
   }
   function buildMenu(){
+    $('resume').classList.toggle('hidden',!resume);
+    if(resume){$('resumeLabel').textContent=resume.label;$('resumeAgo').textContent=savedAgo(resume.at);}
     $('diffSeg').innerHTML=Object.entries(DIFFS).map(([k,d])=>`<button data-d="${k}" class="${k===G.diffKey?'on':''}">${d.label}</button>`).join('');
     $('missionList').innerHTML=MISSIONS.map((M,i)=>{const best=+storage('dropzone-best-'+i).load(0)||0;
       return `<button class="mcard" data-i="${i}"${i===G.sel?' aria-selected="true"':''}><div class="sw" style="background:${M.sw}"><span>${M.code} · ${M.cond}</span></div><h3>${M.name}</h3><p>${M.goal}</p><span class="best">${best?'BEST '+best.toLocaleString():'NOT YET COMPLETED'}</span></button>`;}).join('');
@@ -1393,6 +1410,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
       const pf=b.classList.contains('pad-focus');buildMenu();if(pf)padFocus($('diffSeg').querySelector(`[data-d="${G.diffKey}"]`));});
     listen($('missionList'),'click',e=>{const b=e.target.closest('.mcard');if(!b)return;audio.unlock();selectMission(+b.dataset.i);});
     listen($('deploy'),'click',()=>startMission(G.sel));
+    listen($('continue'),'click',()=>{if(resume)continueRun();});
     listen($('bBack'),'click',toTitle);
     listen($('pResume'),'click',()=>setPaused(false));
     listen($('pAbort'),'click',toTitle);
@@ -1427,7 +1445,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
   }
   if(dom){
     G.world=genWorld(0,'veteran');G.cam.x=W/2;G.cam.y=H*0.85;
-    buildMenu();show('title');
+    showTitle();
     raf=requestAnimationFrame(frame);
   }else if(reducedMotion){
     // one representative frame: a few seconds on the ground in front of the objective, no loop

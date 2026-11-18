@@ -1,6 +1,7 @@
 // The app's screens over the battlefield: title, setup, field manual, records, round card,
 // turn banner, pause, round summary, shop and final standings. Layout comes from layout.js so
 // the hit tests agree; the field and HUD come from the renderer.
+import { savedAgo } from '@nostalgia/save';
 import { AI_LEVELS, THEMES } from '../sim.js';
 import { LAND_NAMES } from '../terrain.js';
 import { GOODS, ITEM, ITEMS, WEAPON, WEAPONS, unitRefund } from '../weapons.js';
@@ -33,7 +34,7 @@ const value = (k, v) => ({
 export function createScreens(g, ui, { drawField, hud }) {
   const pulse = t => 0.6 + 0.4 * Math.sin(t * 4);
   const accent = app => THEME[THEMES[app.sim.theme]]?.accent ?? '#ffd27a';
-  const titleItem = { play: 'NEW MATCH', manual: 'FIELD MANUAL', records: 'RECORDS', exit: 'EXIT' };
+  const titleItem = { continue: 'CONTINUE', play: 'NEW MATCH', manual: 'FIELD MANUAL', records: 'RECORDS', exit: 'EXIT' };
 
   function title(app, t) {
     drawField(app, t);
@@ -44,9 +45,13 @@ export function createScreens(g, ui, { drawField, hud }) {
     ui.label('TURN-BASED ARTILLERY  ·  TWO TO EIGHT TANKS  ·  ONE HILLSIDE', 960, 450, 26, 'rgba(255,255,255,0.75)', 600, 'center', 6);
     const items = app.titleItems();
     items.forEach((it, i) => {
-      const R = menuRect(i), on = i === app.menu;
+      const R = menuRect(i, items.length), on = i === app.menu, col = on ? '#ffffff' : 'rgba(255,255,255,0.62)';
       if (on) { ui.panel(R.x, R.y, R.w, R.h, 18, 0.7, a); glow(g, a, R.x + 30, R.y + R.h / 2, 26, 0.9); }
-      ui.label(titleItem[it], 960, R.y + 45, on ? 38 : 32, on ? '#ffffff' : 'rgba(255,255,255,0.62)', 700, 'center', 5);
+      if (it === 'continue') {
+        // the checkpoint under its entry: the round the match stands at, and how long ago
+        ui.label(titleItem[it], 960, R.y + 34, on ? 30 : 27, col, 700, 'center', 5);
+        ui.label(`${app.saved.label} · ${savedAgo(app.saved.at)}`.toUpperCase(), 960, R.y + 55, 17, on ? a : 'rgba(255,255,255,0.5)', 700, 'center', 3);
+      } else ui.label(titleItem[it], 960, R.y + 45, on ? 38 : 32, col, 700, 'center', 5);
     });
     const kb = app.input.device.kind === 'keyboard';
     const extra = [['start', 'SELECT']];

@@ -19,7 +19,8 @@ export function trayRect(i, n) {
   return { x: x0 + i * (w + gap), y: 176, w, h: 100 };
 }
 export const TRAY_CLOSE = { x: 1700, y: 196, w: 60, h: 60 };
-export const menuRect = i => ({ x: 960 - 240, y: 560 + i * 78, w: 480, h: 64 });
+// the title's entries: five (CONTINUE first) sit higher and closer, clear of the legend
+export const menuRect = (i, n = 4) => (n > 4 ? { x: 960 - 240, y: 536 + i * 72, w: 480, h: 64 } : { x: 960 - 240, y: 560 + i * 78, w: 480, h: 64 });
 export const pauseRect = i => ({ x: 960 - 230, y: 520 + i * 82, w: 460, h: 66 });
 export const finalRect = i => ({ x: 960 - 470 + i * 500, y: 930, w: 440, h: 70 });
 export const BACK = { x: 1680, y: 64, w: 150, h: 56 };

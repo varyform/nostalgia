@@ -1,9 +1,10 @@
 // The game session: input → actions, the screen flow (title, level select, level card, play,
 // pause, level clear, game over and continue, ending, editor), the attract-mode demo, sound,
-// touch controls and the saved progress. It never draws: the renderer (hd/render.js) reads
+// touch controls, the saved progress and the autosave behind the title's CONTINUE. It never draws: the renderer (hd/render.js) reads
 // this `app` object every frame.
 import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
+import { createAutosave } from '@nostalgia/save';
 import meta from '../game.json';
 import { createAudio } from './audio.js';
 import { createEditor } from './editor.js';
@@ -40,6 +41,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     won: !!loaded.won,
   };
   const store = () => saved.save(save);
+  // the checkpoint: the level the run stands at, with the score and lives it began it with
+  const autosave = createAutosave('glimmer', { enabled: !demo, version: 1 });
 
   const freshRun = () => ({ score: 0, lives: LIVES, startScore: 0 });
   const app = {
@@ -47,13 +50,21 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     sim, input, demo, onExit, save,
     level: 0, sel: 0, custom: null, // custom: the editor's level being test-played
     run: freshRun(), newBest: false, worldIntro: false, lifeUp: false,
-    touch: null, editor: null, menu: 0,
+    touch: null, editor: null, menu: 0, saved: autosave.load(),
     get soundOn() { return audio ? audio.on : false; },
     get def() { return app.custom ?? LEVELS[app.level]; },
     sfx: name => audio?.sfx(name),
   };
   const view = (renderer ?? createRenderer)(cv, app);
-  function setState(s) { app.state = s; app.stT = 0; }
+  function setState(s) {
+    // back on the title: CONTINUE comes and goes with the checkpoint, and a new one is picked first
+    if (s === 'title' && app.state !== 'title') {
+      const was = app.saved?.at;
+      app.saved = autosave.load();
+      if (app.saved?.at !== was) app.menu = 0;
+    }
+    app.state = s; app.stT = 0;
+  }
 
   // ---------- page plumbing (not in the demo) ----------
   if (!demo) {
@@ -79,6 +90,21 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     app.newBest = false; app.lifeUp = false;
     view.level?.(sim);
   }
+  // a level of the campaign begins (or begins again after a lost life): its checkpoint
+  function playLevel(i, opts) {
+    loadLevel(i, opts);
+    checkpoint(i);
+    setState('ready');
+  }
+  function checkpoint(level) {
+    const { score, lives } = app.run;
+    autosave.save({ level, score, lives }, `Level ${LEVELS[level].id} · ${score.toLocaleString('en-US')}`);
+  }
+  function resume({ level, score, lives }) {
+    app.run = { score: Math.max(0, score | 0), lives: Math.min(MAX_LIVES, Math.max(1, lives | 0)), startScore: 0 };
+    loadLevel(Math.min(LEVELS.length - 1, Math.max(0, level | 0)));
+    setState('ready');
+  }
   function loadCustom(def) {
     app.custom = def;
     app.run = freshRun();
@@ -88,8 +114,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   }
   function reload() {
     app.run.score = app.run.startScore;
-    if (app.custom) { sim.load(app.custom, { seed: (Math.random() * 1e9) | 0, score: app.run.score }); view.level?.(sim); }
-    else loadLevel(app.level);
+    if (app.custom) { sim.load(app.custom, { seed: (Math.random() * 1e9) | 0, score: app.run.score }); view.level?.(sim); setState('ready'); }
+    else playLevel(app.level);
   }
   function levelCleared() {
     const s = sim.s;
@@ -101,12 +127,14 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     save.reached = Math.max(save.reached, Math.min(LEVELS.length - 1, app.level + 1));
     if (app.level === LEVELS.length - 1) save.won = true;
     store();
+    // the next level is where a run that stops on the clear screen picks up; the last one ends it
+    if (app.level === LEVELS.length - 1) autosave.clear();
+    else checkpoint(app.level + 1);
   }
   function lostLife() {
     app.run.lives--;
     if (app.run.lives <= 0) { audio?.sfx('gameover'); setState('over'); return; }
     reload();
-    setState('ready');
   }
 
   // ---------- input → actions ----------
@@ -157,7 +185,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         if (hit('start')) {
           const it = items[app.menu];
           audio.sfx('select');
-          if (it === 'play') { app.sel = save.reached; setState('select'); }
+          if (it === 'continue') resume(app.saved.state);
+          else if (it === 'play') { app.sel = save.reached; setState('select'); }
           else if (it === 'editor') { app.editor.open(); setState('editor'); }
           else if (it === 'exit') onExit?.();
         } else if (onExit && hit('quit')) onExit();
@@ -173,7 +202,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         if (tp && picked == null) { setState('title'); break; }
         if (picked != null) app.sel = picked;
         if (hit('start')) {
-          if (app.sel <= save.reached) { audio.sfx('select'); loadLevel(app.sel, { fresh: true }); setState('ready'); }
+          if (app.sel <= save.reached) { audio.sfx('select'); playLevel(app.sel, { fresh: true }); }
           else audio.sfx('deny');
         } else if (hit('back') || hit('quit')) setState('title');
         break;
@@ -200,16 +229,16 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         if (app.stT > 1.2 && hit('start')) {
           if (app.custom) { app.editor.open(); setState('editor'); }
           else if (app.level === LEVELS.length - 1) setState('ending');
-          else { loadLevel(app.level + 1); setState('ready'); }
+          else playLevel(app.level + 1);
         } else if (app.stT > 1.2 && (hit('back') || hit('quit')) && !app.custom) { app.sel = Math.min(save.reached, app.level + 1); setState('select'); }
         break;
       case 'over':
-        if (app.stT > 10) { setState('title'); break; }
+        // declining the continue (or letting it run out) ends the run, and its checkpoint
+        if (app.stT > 10) { if (!app.custom) autosave.clear(); setState('title'); break; }
         if (app.stT > 1 && hit('start')) {
           // continue: the same level, fresh lives, the score starts over
-          if (app.custom) loadCustom(app.custom); else { app.run = freshRun(); loadLevel(app.level); }
-          setState('ready');
-        } else if (app.stT > 1 && (hit('back') || hit('quit'))) { if (app.custom) { app.editor.open(); setState('editor'); } else setState('title'); }
+          if (app.custom) { loadCustom(app.custom); setState('ready'); } else playLevel(app.level, { fresh: true });
+        } else if (app.stT > 1 && (hit('back') || hit('quit'))) { if (app.custom) { app.editor.open(); setState('editor'); } else { autosave.clear(); setState('title'); } }
         break;
       case 'ending':
         if (app.stT > 3 && hit('start')) setState('title');
@@ -223,7 +252,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     }
     app.touch?.clear();
   }
-  const titleItems = () => ['play', 'editor', ...(onExit ? ['exit'] : [])];
+  const titleItems = () => [...(app.saved ? ['continue'] : []), 'play', 'editor', ...(onExit ? ['exit'] : [])];
   app.titleItems = titleItems;
 
   function sound() {

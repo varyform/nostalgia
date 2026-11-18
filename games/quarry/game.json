@@ -9,6 +9,7 @@
   "facts": [
     ["Levels", "8, then they cycle harder"],
     ["Scores", "Top ten, initials saved in the browser"],
+    ["Autosave", "At the start of each level"],
     ["Input", "Keyboard, gamepad, touch"]
   ],
   "input": {

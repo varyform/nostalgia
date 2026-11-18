@@ -1,9 +1,10 @@
 // The game session: input → actions, the screen flow (title, high scores, venue card, play,
 // pause, screen clear, Order Up! bonus, game over, initials), the attract-mode demo, sound,
-// touch and the saved high-score table. It never draws: a renderer (cga/ or hd/) reads this
+// touch, the saved high-score table and the autosave behind the title's CONTINUE. It never draws: a renderer (cga/ or hd/) reads this
 // `app` object every frame and answers touch hit tests.
 import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
+import { createAutosave } from '@nostalgia/save';
 import meta from '../game.json';
 import { createAudio } from './audio.js';
 import { createPilot } from './pilot.js';
@@ -37,16 +38,26 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   let scores = DEFAULT_SCORES.map(s => ({ ...s }));
   const got = saved.load(null);
   if (Array.isArray(got) && got.length) scores = got.filter(s => s && typeof s.score === 'number').slice(0, TABLE);
+  // the checkpoint: where the current screen or Order Up! round began
+  const autosave = createAutosave('brimful', { enabled: !demo, version: 1 });
   const app = {
     state: demo ? 'play' : 'title', stT: 0, t: 0, fade: demo ? 1 : 0,
     sim, input, demo, onExit, scores, menu: 0, newRank: -1,
     entry: { letters: [0, 0, 0], pos: 0 },
-    touch: null, venues: VENUES,
+    touch: null, venues: VENUES, saved: autosave.load(),
     get soundOn() { return audio ? audio.on : false; },
-    titleItems: () => ['play', 'scores', ...(onExit ? ['exit'] : [])],
+    titleItems: () => [...(app.saved ? ['continue'] : []), 'play', 'scores', ...(onExit ? ['exit'] : [])],
   };
   const view = renderer(cv, app);
-  function setState(s) { app.state = s; app.stT = 0; }
+  function setState(s) {
+    // back on the title: CONTINUE comes and goes with the checkpoint, and a new one is picked first
+    if (s === 'title' && app.state !== 'title') {
+      const was = app.saved?.at;
+      app.saved = autosave.load();
+      if (app.saved?.at !== was) app.menu = 0;
+    }
+    app.state = s; app.stT = 0;
+  }
 
   // ---------- page plumbing (not in the demo) ----------
   if (!demo) {
@@ -83,6 +94,24 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     app.newRank = scores.indexOf(entry);
     saved.save(scores);
   }
+
+  // ---------- autosave ----------
+  // A checkpoint is taken on the venue card before every screen and Order Up! round: enough to
+  // begin that stage again as it began, never the live counters.
+  function checkpoint() {
+    const { venue, screen, loop, stage, mode, lives, score, nextLife, stats } = sim;
+    const where = mode === 'bonus' ? 'Order Up!' : `${VENUES[venue].name} ${screen + 1}`;
+    autosave.save({ venue, screen, loop, stage, mode, lives, score, nextLife, stats }, `${loop ? `Tour ${loop + 1} · ` : ''}${where} · ${score.toLocaleString('en-US')}`);
+  }
+  function resume(c) {
+    sim.newGame();
+    const v = Math.min(VENUES.length - 1, Math.max(0, c.venue | 0));
+    const score = Math.max(0, c.score | 0);
+    Object.assign(sim, { lives: Math.max(1, c.lives | 0), score, nextLife: Math.max(score + 1, c.nextLife | 0), stage: c.stage | 0, stats: { ...sim.stats, ...c.stats } });
+    if (c.mode === 'bonus') { Object.assign(sim, { venue: v, V: VENUES[v], loop: c.loop | 0 }); sim.startBonus(); }
+    else sim.loadScreen(v, Math.min(VENUES[v].screens - 1, Math.max(0, c.screen | 0)), c.loop | 0);
+  }
+  function toCard() { checkpoint(); setState('card'); }
 
   // ---------- input → actions ----------
   const touchHits = () => {
@@ -158,7 +187,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         if (hit('start') || hit('pour') || m) {
           const it = items[app.menu];
           audio.sfx('select');
-          if (it === 'play') { sim.newGame(); target = null; setState('card'); }
+          if (it === 'continue') { resume(app.saved.state); target = null; setState('card'); }
+          else if (it === 'play') { sim.newGame(); target = null; toCard(); }
           else if (it === 'scores') { app.newRank = -1; setState('scores'); }
           else if (it === 'exit') onExit?.();
         } else if (onExit && hit('quit')) onExit();
@@ -175,12 +205,12 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         if (hit('pause') || tapped('pause')) { setState('pause'); break; }
         sim.step(actions());
         if (sim.status === 'clear' && sim.statusT > 1.0) setState('clear');
-        else if (sim.status === 'over') setState('over');
+        else if (sim.status === 'over') { autosave.clear(); setState('over'); }
         break;
       case 'bonus':
         if (hit('pause') || tapped('pause')) { setState('pause'); break; }
         sim.step(bonusActions());
-        if (sim.bonus.phase === 'done') { sim.advance(); setState('card'); }
+        if (sim.bonus.phase === 'done') { sim.advance(); toCard(); }
         break;
       case 'pause':
         if (hit('pause') || hit('back') || hit('start') || tap) setState(sim.mode === 'bonus' ? 'bonus' : 'play');
@@ -190,7 +220,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         sim.step({});
         if (app.stT > 3.4 || (app.stT > 1.2 && (hit('start') || hit('pour') || tap))) {
           sim.advance();
-          setState('card');
+          toCard();
         }
         break;
       case 'over':

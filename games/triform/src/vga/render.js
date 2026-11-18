@@ -437,8 +437,16 @@ export function createVgaRenderer(cv) {
     rows.push(last);
     if (kb) rows.push([['forms', 'FORM', true], ['fullscreen', 'FULLSCREEN']]);
     if (app.onExit) (rows[rows.length - 1].length < 2 ? rows[rows.length - 1] : rows[rows.push([]) - 1]).push(['quit', 'EXIT']);
-    legend(input, rows, 118, 11);
-    if (Math.floor(app.t * 2) % 2) prompt(input, 'PRESS {start} TO START', W / 2, 178, C.yellow[4], 'center');
+    const items = app.items();
+    legend(input, rows, 118, items.length > 1 ? 10 : 11);
+    if (items.length > 1) {
+      // CONTINUE (the autosave) over NEW GAME; the picked one blinks between arrows
+      items.forEach((it, k) => {
+        const s = it === 'continue' ? 'CONTINUE · ' + app.saved.label : 'NEW GAME', y = 167 + k * 10, on = k === app.menu, x = Math.round((W - textWidth(s)) / 2);
+        text(s, x, y, on ? C.yellow[4] : C.dim);
+        if (on && Math.floor(app.t * 3) % 2) { text('>', x - 10, y, C.yellow[4]); text('<', x + textWidth(s) + 4, y, C.yellow[4]); }
+      });
+    } else if (Math.floor(app.t * 2) % 2) prompt(input, 'PRESS {start} TO START', W / 2, 178, C.yellow[4], 'center');
     const best = app.best;
     const hs = 'BEST ' + String(best.score).padStart(6, '0') + (best.time ? '  ' + clock(best.time) : ''), so = 'SOUND ' + (app.soundOn ? 'ON' : 'OFF');
     const sx = Math.round((W - textWidth(hs) - 18 - textWidth(so)) / 2);

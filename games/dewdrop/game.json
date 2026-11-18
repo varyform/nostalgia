@@ -9,6 +9,7 @@
   "facts": [
     ["Gardens", "Mossy Hollow, Whisper Reeds, Thornwood, Moon Pond"],
     ["Stages", "24, plus your own in the editor"],
+    ["Autosave", "At the start of each stage"],
     ["Input", "Keyboard, gamepad, touch"]
   ],
   "input": {

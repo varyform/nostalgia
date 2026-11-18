@@ -1,9 +1,11 @@
 // The game session: input → the drill's input, the screen flow (title, play, pause, game over,
-// initials for the score table), the attract-mode demo, sound, touch and the saved scores.
+// initials for the score table), the attract-mode demo, sound, touch, the saved scores and
+// the autosave (a checkpoint as each level begins, resumed from the title's CONTINUE).
 // It never draws: a renderer (cga/render.js or hd/render.js) reads this `app` object every
 // frame and implements { draw(app), events(list, sim), destroy() }.
 import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
+import { createAutosave, savedAgo } from '@nostalgia/save';
 import meta from '../game.json';
 import { createAudio } from './audio.js';
 import { LEVELS } from './levels.js';
@@ -38,6 +40,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   const got = saved.load(null);
   if (got && Array.isArray(got.table)) save = { table: got.table.slice(0, TABLE), last: typeof got.last === 'string' ? got.last : 'AAA' };
   const store = () => saved.save(save);
+  // the autosave: where the current level began, kept apart from the score table
+  const autosave = createAutosave('quarry', { enabled: !demo, version: 1 });
   const qualifies = score => score > 0 && (save.table.length < TABLE || score > save.table[save.table.length - 1].s);
 
   const app = {
@@ -46,10 +50,14 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     entry: { letters: 'AAA', pos: 0 }, touch: null, levels: LEVELS,
     get soundOn() { return audio ? audio.on : false; },
     get hi() { return Math.max(save.table[0]?.s ?? 0, sim.s?.score ?? 0); },
-    items: () => ['play', ...(onExit ? ['exit'] : [])],
+    saved: autosave.load(), savedAgo: () => (app.saved ? savedAgo(app.saved.at) : ''),
+    items: () => [...(app.saved ? ['continue'] : []), 'play', ...(onExit ? ['exit'] : [])],
   };
   const view = renderer(cv, app);
-  function setState(s) { app.state = s; app.stT = 0; }
+  function setState(s) {
+    app.state = s; app.stT = 0;
+    if (s === 'title') { app.saved = autosave.load(); app.menu = 0; }
+  }
 
   // ---------- page plumbing (not in the demo) ----------
   let typed = [];
@@ -81,9 +89,16 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     return out;
   }
 
-  function newGame() {
-    sim.newGame({ level: 0, seed: (Math.random() * 1e9) | 0, lives: 2 });
+  function newGame({ level = 0, seed = (Math.random() * 1e9) | 0, lives = 2, score = 0 } = {}) {
+    sim.newGame({ level, seed, lives, score });
     view.level?.(sim);
+    checkpoint();
+  }
+  // a checkpoint as each level begins: the level, the score and lives it begins on, and the
+  // seed it begins from, so it starts again as it did
+  function checkpoint() {
+    const { level, score, lives, seed } = sim.s;
+    autosave.save({ level, score, lives, seed }, `Level ${level + 1} · ${score.toLocaleString('en-US')}`);
   }
   function gameOver() {
     if (qualifies(sim.s.score)) {
@@ -159,7 +174,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         if (hit('start') || hit('fire')) {
           const it = items[app.menu];
           audio.sfx('select');
-          if (it === 'play') { newGame(); setState('play'); }
+          if (it === 'continue') { newGame(app.saved.state); setState('play'); }
+          else if (it === 'play') { newGame(); setState('play'); }
           else if (it === 'exit') onExit?.();
         } else if (onExit && hit('quit')) onExit();
         // the right-hand page turns by itself: how to play ⇄ the best diggers
@@ -169,11 +185,13 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
       case 'play':
         if (hit('pause')) { setState('pause'); break; }
         sim.step(controls());
-        if (sim.s.status === 'over' && sim.s.statusT > 3) gameOver();
+        if (sim.s.status === 'over' && sim.s.statusT > 3) { autosave.clear(); gameOver(); }
         break;
       case 'pause':
         if (hit('pause') || hit('back') || hit('start') || hit('fire')) setState('play');
-        else if (hit('quit')) { if (qualifies(sim.s.score)) gameOver(); else { app.page = 1; app.rank = -1; setState('title'); } }
+        // the run isn't over: its checkpoint stays for CONTINUE, so the score goes to the table
+        // when the run ends, not here as well (a quit then continued run would be entered twice)
+        else if (hit('quit')) { app.page = 1; app.rank = -1; setState('title'); }
         break;
       case 'entry':
         entryStep();
@@ -195,7 +213,11 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   // ---------- loop ----------
   function tick() {
     update();
-    if (sim.s && sim.s.loadId !== lastLoad) { lastLoad = sim.s.loadId; view.level?.(sim); }
+    if (sim.s && sim.s.loadId !== lastLoad) {
+      lastLoad = sim.s.loadId;
+      view.level?.(sim);
+      if (app.state === 'play') checkpoint(); // the next level, after a clear
+    }
     view.events(sim.events, sim);
     sound();
     sim.events.length = 0;

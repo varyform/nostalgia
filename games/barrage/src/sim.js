@@ -5,6 +5,7 @@
 //
 //   const sim = createSim({ seed });
 //   sim.newMatch(setup);              // also starts round 1
+//   sim.resumeMatch(checkpoint);      // a match saved between rounds: starts the round after it
 //   sim.step({ angle, power, weapon, use, drive, fire });   // commands for the tank whose turn it is
 //   sim.phase: 'aim' | 'flight' | 'round' (round over) | 'match' (match over)
 //   sim.nextRound();  sim.buy(p, id);  sim.sell(p, id);  sim.predict(tank, angle, power, { wind })
@@ -57,7 +58,7 @@ export function createSim({ seed = 1 } = {}) {
     wind: 0, walls: 'open', land: 'hills', theme: 0, sea: 0,
     projectiles: [], blasts: [], flames: [], beams: [],
     flightT: 0, quietT: 0, winner: -1, roundLog: null, nextId: 1,
-    newMatch, nextRound, step, buy, sell, predict, has, reseed, busy, shotFrom,
+    newMatch, resumeMatch, nextRound, step, buy, sell, predict, has, reseed, busy, shotFrom,
     get tank() { return S.tanks[S.current]; },
   };
   function reseed(s) { rand = rng(s); }
@@ -76,6 +77,18 @@ export function createSim({ seed = 1 } = {}) {
       roundStart: 0,
     }));
     S.round = 0;
+    startRound();
+  }
+  // the players as they stood after `round` rounds (cash, stock, scores): play the next one
+  function resumeMatch({ setup, players, round }) {
+    S.setup = { ...setup, players: setup.players.map(p => ({ ...p })) };
+    S.players = players.map((p, i) => ({
+      i, name: p.name, color: p.color, ai: p.ai | 0, persona: p.persona ?? (p.ai ? pick(PERSONAS) : null),
+      cash: Math.max(0, p.cash | 0), inv: { ...p.inv },
+      stats: { wins: 0, kills: 0, deaths: 0, dmg: 0, shots: 0, hits: 0, earned: 0, ...p.stats },
+      roundStart: 0,
+    }));
+    S.round = Math.max(0, Math.min(S.setup.rounds - 1, round | 0));
     startRound();
   }
   function nextRound() {

@@ -428,7 +428,7 @@ export function createHdRenderer(cv, app) {
   function hit(px, py, app) {
     const x = px / u, y = py / u, sim = app.sim;
     switch (app.state) {
-      case 'title': { const i = app.titleItems().findIndex((_, k) => inside(menuRect(k), x, y)); return i >= 0 ? { act: 'menu', i } : null; }
+      case 'title': { const items = app.titleItems(), i = items.findIndex((_, k) => inside(menuRect(k, items.length), x, y)); return i >= 0 ? { act: 'menu', i } : null; }
       case 'manual': return inside(BACK, x, y) ? { act: 'back' } : { act: 'page' };
       case 'setup': {
         if (inside(BACK, x, y)) return { act: 'back' };

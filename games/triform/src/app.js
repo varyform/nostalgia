@@ -1,12 +1,15 @@
 // The game session: input → actions, the screen flow (title, intro, play, pause, map, game
-// over, victory), the attract-mode demo, sound and the saved best. It never draws: a
+// over, victory), the attract-mode demo, sound, the saved best and the autosave (a checkpoint
+// as each zone begins, resumed from the title's CONTINUE). It never draws: a
 // renderer (vga/render.js today) reads this `app` object every frame.
 import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
+import { createAutosave, savedAgo } from '@nostalgia/save';
 import meta from '../game.json';
 import { createAudio } from './audio.js';
 import { createPilot } from './route.js';
 import { DT, createSim } from './sim.js';
+import { ZONES } from './world.js';
 
 const BEST_KEY = 'triform-best';
 // demo segments: start room, upgrades carried in, and where the segment ends
@@ -32,12 +35,30 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
 
   const saved = storage(BEST_KEY, { enabled: !demo });
   let best = { score: 0, time: 0, ...saved.load({}) };
+  // the autosave: where the current zone began, kept apart from the best
+  const autosave = createAutosave('triform', { enabled: !demo, version: 1 });
   const app = {
     state: demo ? 'play' : 'title', stT: 0, t: 0, fade: 0,
     sim, input, demo, onExit, best,
+    saved: autosave.load(), menu: 0, // the title's menu: CONTINUE (with a save), NEW GAME
+    items: () => (app.saved ? ['continue', 'new'] : ['new']),
+    savedAgo: () => (app.saved ? savedAgo(app.saved.at) : ''),
     get soundOn() { return audio ? audio.on : false; },
   };
-  function setState(s) { app.state = s; app.stT = 0; }
+  function setState(s) {
+    app.state = s; app.stT = 0;
+    if (s === 'title') { app.saved = autosave.load(); app.menu = 0; }
+  }
+  // a checkpoint as each zone begins: what it takes to arrive there again
+  let reached = -1;
+  function checkpoint() {
+    const zone = sim.room.zone;
+    if (zone <= reached) return;
+    reached = zone;
+    const cp = { room: sim.room.id, ups: { ...sim.upgrades }, score: sim.score, lives: sim.lives, t: sim.t, deaths: sim.deaths, kills: sim.kills };
+    const name = ZONES[zone].name.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    autosave.save(cp, `${name} · ${sim.score.toLocaleString('en-US')}`);
+  }
   function saveBest() {
     if (demo) return;
     const won = sim.status === 'victory';
@@ -92,19 +113,29 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     input.update();
     if (hit('sound')) audio.setOn(!audio.on);
     switch (app.state) {
-      case 'title':
-        if (hit('start')) { audio.sfx('select'); setState('intro'); }
-        else if (onExit && (hit('quit') || hit('back'))) onExit();
+      case 'title': {
+        const items = app.items();
+        if (items.length > 1 && (hit('up') || hit('down'))) { app.menu = (app.menu + 1) % items.length; audio.sfx('select'); }
+        if (hit('start')) {
+          audio.sfx('select');
+          if (items[app.menu] === 'continue') {
+            sim.resume(app.saved.state);
+            reached = sim.room.zone;
+            setState('play');
+          } else setState('intro');
+        } else if (onExit && (hit('quit') || hit('back'))) onExit();
         break;
+      }
       case 'intro':
-        if (hit('start') && app.stT > 0.3) { sim.newGame(); setState('play'); }
+        if (hit('start') && app.stT > 0.3) { sim.newGame(); reached = -1; checkpoint(); setState('play'); }
         break;
       case 'play':
         if (hit('pause')) { setState('pause'); break; }
         if (hit('map')) { setState('map'); break; }
         sim.step(actions());
-        if (sim.status === 'gameover') { saveBest(); setState('over'); }
-        if (sim.status === 'victory') { saveBest(); setState('victory'); }
+        if (sim.status === 'play') checkpoint();
+        if (sim.status === 'gameover') { saveBest(); autosave.clear(); setState('over'); }
+        if (sim.status === 'victory') { saveBest(); autosave.clear(); setState('victory'); }
         break;
       case 'pause':
         if (hit('pause') || hit('back')) setState('play');

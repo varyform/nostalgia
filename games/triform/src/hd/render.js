@@ -631,8 +631,18 @@ export function createHdRenderer(cv) {
     if (app.onExit) last.push(['quit', 'EXIT']);
     rows.push(last);
     legend(input, rows, cw / 2, 740 * u, 50, 20);
-    const pulse = 0.55 + Math.sin(now * 4) * 0.45;
-    prompt(input, 'PRESS {start} TO START', cw / 2, 930 * u, 30, rgba(C.yellow[4], pulse), 'center', 700);
+    const pulse = 0.55 + Math.sin(now * 4) * 0.45, items = app.items();
+    if (items.length > 1) {
+      // CONTINUE (the autosave, and how old it is) over NEW GAME
+      items.forEach((it, k) => {
+        const on = k === app.menu, y = 905 * u + k * 64 * u;
+        const s = it === 'continue' ? 'CONTINUE  ·  ' + app.saved.label.toUpperCase() : 'NEW GAME';
+        const size = on ? 30 : 26;
+        label(s, cw / 2, y, size, on ? rgba(C.yellow[4], pulse) : 'rgba(255,255,255,0.45)', 700, 'center', 4);
+        if (it === 'continue') label(app.savedAgo().toUpperCase(), cw / 2, y + 30 * u, 16, 'rgba(255,255,255,0.4)', 600, 'center', 4);
+        if (on) prompt(input, '{start}', cw / 2 - labelW(s, size, 700, 4) / 2 - 50 * u, y - 10 * u, 26, rgba(C.yellow[4], pulse), 'center', 700);
+      });
+    } else prompt(input, 'PRESS {start} TO START', cw / 2, 930 * u, 30, rgba(C.yellow[4], pulse), 'center', 700);
     const best = app.best;
     label('BEST ' + pad6(best.score) + (best.time ? '   ·   ' + clock(best.time) : '') + '      SOUND ' + (app.soundOn ? 'ON' : 'OFF'), cw / 2, 1030 * u, 18, 'rgba(255,255,255,0.5)', 600, 'center', 4);
   }

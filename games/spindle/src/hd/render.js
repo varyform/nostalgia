@@ -8,6 +8,7 @@
 //   view.events(sim.events, sim); view.draw(app); view.menuAt(x, y)
 import { drawPrompt, drawGlyphs, glyphs, measureGlyphs } from '@nostalgia/input';
 import { fitWide } from '@nostalgia/game/runtime';
+import { savedAgo } from '@nostalgia/save';
 import { BONUS, COLS, HERO_H, K, P as PHYS, SCORE, SEA, adiff, colOf } from '../sim.js';
 import { layout as touchLayout } from '../touch.js';
 import { TAU, THEMES, canvas, clamp, css, drawClink, drawCrab, drawDrip, drawGem, drawJelly, drawKite, drawSquall, drawUrchin, mix, mixc, rgb } from './art.js';
@@ -725,9 +726,11 @@ export function createRenderer(cv) {
         g.fillStyle = 'rgba(255,210,74,0.16)'; g.beginPath(); g.roundRect(x - w / 2, yy - h / 2, w, h, h / 2); g.fill();
         g.strokeStyle = css(rgb(GOLD), 0.5 + Math.sin(t * 5) * 0.25); g.lineWidth = 2 * u; g.stroke();
       }
-      const text = it === 'play' ? 'PLAY' : it === 'exit' ? 'EXIT' : `◀  TOWER ${app.pick + 1}  ▶`;
+      const text = it === 'continue' ? 'CONTINUE' : it === 'play' ? 'PLAY' : it === 'exit' ? 'EXIT' : `◀  TOWER ${app.pick + 1}  ▶`;
       label(text, x, yy + 13 * u, 34, sel ? GOLD : DIM, { font: HEAD, align: 'center', spacing: 3 });
       if (it === 'tower') label(app.towers[app.pick].name.toUpperCase(), x, yy + 44 * u, 18, DIM, { align: 'center', spacing: 2 });
+      // the checkpoint under its entry: where the climb stands and how long ago
+      if (it === 'continue') label(`${app.saved.label} · ${savedAgo(app.saved.at)}`.toUpperCase(), x, yy + 44 * u, 18, DIM, { align: 'center', spacing: 2 });
     });
   }
   function howTo(app, x0, y0, w, t) {

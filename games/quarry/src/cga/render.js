@@ -268,7 +268,8 @@ export function createCgaRenderer(cv) {
     blit(S.drill[0][Math.floor(Date.now() / 120) % 2], Math.round((W - w) / 2) - 26, y + 7);
     blit(S.gem, Math.round((W + w) / 2) + 8, y + 10);
   }
-  const ITEM_Y = 160;
+  // the title's menu rows: three (CONTINUE, PLAY, EXIT) sit a little higher and closer
+  const itemY = (n, k) => (n > 2 ? 156 + k * 9 : 160 + k * 10);
   function drawTitle(app, t) {
     g.fillStyle = P[0]; g.fillRect(0, 0, W, H);
     // a band of soil at top and bottom
@@ -308,7 +309,7 @@ export function createCgaRenderer(cv) {
     }
     const items = app.items();
     items.forEach((it, k) => {
-      const label = it === 'play' ? 'PLAY' : 'EXIT TO DOS', y = ITEM_Y + k * 10, sel = k === app.menu;
+      const label = it === 'continue' ? `CONTINUE · ${app.saved.label}`.toUpperCase() : it === 'play' ? 'PLAY' : 'EXIT TO DOS', y = itemY(items.length, k), sel = k === app.menu;
       const w = textWidth(label);
       text(label, (W - w) / 2, y, sel ? 3 : 1);
       if (sel && Math.floor(t * 3) % 2) { text('>', (W - w) / 2 - 10, y, 2); text('<', (W + w) / 2 + 4, y, 2); }
@@ -332,7 +333,9 @@ export function createCgaRenderer(cv) {
 
   // ---------- frame ----------
   let lastT = performance.now(), lastBorder = '#000';
+  let lastApp = null;
   function draw(app) {
+    lastApp = app;
     const now = performance.now(), dt = Math.min(0.1, (now - lastT) / 1000);
     lastT = now;
     stepFx(dt);
@@ -359,8 +362,8 @@ export function createCgaRenderer(cv) {
     if (app.fade > 0) veil(app.fade);
   }
   function menuAt(x, y) {
-    const n = 2;
-    for (let k = 0; k < n; k++) if (Math.abs(y - (ITEM_Y + k * 10 + 3)) < 6) return k;
+    const n = lastApp?.items().length ?? 2;
+    for (let k = 0; k < n; k++) if (Math.abs(y - (itemY(n, k) + 3)) < (n > 2 ? 5 : 6)) return k;
     return null;
   }
   function level(sim) { if (sim.s) syncTunnels(sim.s); parts = []; pops = []; }

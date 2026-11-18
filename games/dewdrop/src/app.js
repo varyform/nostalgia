@@ -1,9 +1,11 @@
 // The game session: input → actions, the screen flow (title, stage select, stage card, play,
 // pause, stage clear, game over and continue, ending, editor), the attract-mode demo, sound,
-// touch controls and the saved progress. It never draws: the renderer (hd/render.js) reads
-// this `app` object every frame.
+// touch controls, the saved progress and the autosave (a checkpoint as each stage of a run
+// begins, resumed from the title's CONTINUE). It never draws: the renderer (hd/render.js)
+// reads this `app` object every frame.
 import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
+import { createAutosave, savedAgo } from '@nostalgia/save';
 import meta from '../game.json';
 import { createAudio } from './audio.js';
 import { createEditor } from './editor.js';
@@ -34,6 +36,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   const saved = storage(SAVE_KEY, { enabled: !demo });
   const save = { unlocked: 0, best: {}, custom: [], ...saved.load({}) };
   const store = () => saved.save(save);
+  // the autosave: where the run's current stage began, kept apart from the progress above
+  const autosave = createAutosave('dewdrop', { enabled: !demo, version: 1 });
 
   const app = {
     state: demo ? 'play' : 'title', stT: 0, t: 0, fade: demo ? 1 : 0,
@@ -42,11 +46,15 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     run: { score: 0, lives: LIVES, startScore: 0, startLives: LIVES, nextLife: 0 },
     over: { t: 0 }, newBest: false, worldIntro: false,
     touch: null, editor: null, menu: 0,
+    saved: autosave.load(), savedAgo: () => (app.saved ? savedAgo(app.saved.at) : ''),
     get soundOn() { return audio ? audio.on : false; },
     get def() { return app.custom ?? STAGES[app.stage]; },
   };
   const view = (renderer ?? createRenderer)(cv, app);
-  function setState(s) { app.state = s; app.stT = 0; }
+  function setState(s) {
+    app.state = s; app.stT = 0;
+    if (s === 'title') { app.saved = autosave.load(); app.menu = 0; }
+  }
 
   // ---------- page plumbing (not in the demo) ----------
   if (!demo) {
@@ -95,6 +103,17 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     save.unlocked = Math.max(save.unlocked, Math.min(STAGES.length - 1, app.stage + 1));
     if (app.stage === STAGES.length - 1) save.won = true;
     store();
+    if (app.stage === STAGES.length - 1) autosave.clear(); // home: the run is over
+    else checkpoint(app.stage + 1);
+  }
+  // a checkpoint: the stage the run is about to begin, with the score and lives it begins on
+  function checkpoint(i) {
+    const r = app.run;
+    autosave.save({ stage: i, score: r.score, lives: r.lives, nextLife: r.nextLife }, `Stage ${STAGES[i].id} · ${r.score.toLocaleString('en-US')}`);
+  }
+  function resume({ stage, score, lives, nextLife }) {
+    app.run = { score, lives, startScore: score, startLives: lives, nextLife };
+    loadStage(Math.max(0, Math.min(STAGES.length - 1, stage)));
   }
 
   // ---------- input → actions ----------
@@ -141,10 +160,12 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         app.menu = Math.min(app.menu, items.length - 1);
         const tp = app.touch?.tapAt, tapped = tp ? view.menuAt?.(tp.x, tp.y) : null;
         if (tapped != null) app.menu = tapped;
-        if (hit('start') || hit('jump')) {
+        // ArrowUp is a jump key too: moving up the menu must not also pick
+        if (hit('start') || (hit('jump') && !input.pressed('up'))) {
           const it = items[app.menu];
           audio.sfx('select');
-          if (it === 'play') { app.sel = save.unlocked; setState('select'); }
+          if (it === 'continue') { resume(app.saved.state); setState('ready'); }
+          else if (it === 'play') { app.sel = save.unlocked; setState('select'); }
           else if (it === 'editor') { app.editor.open(); setState('editor'); }
           else if (it === 'exit') onExit?.();
         } else if (onExit && hit('quit')) onExit();
@@ -160,7 +181,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         if (tp && picked == null) { setState('title'); break; }
         if (picked != null) app.sel = picked;
         if (hit('start') || hit('jump')) {
-          if (app.sel <= save.unlocked) { audio.sfx('select'); loadStage(app.sel, { fresh: true }); setState('ready'); }
+          if (app.sel <= save.unlocked) { audio.sfx('select'); loadStage(app.sel, { fresh: true }); checkpoint(app.sel); setState('ready'); }
           else audio.sfx('deny');
         } else if (hit('back') || hit('quit')) setState('title');
         break;
@@ -192,13 +213,17 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
         break;
       case 'over':
         sim.step({});
-        if (app.stT > 10) { setState('title'); break; }
+        // the continue offer runs out or is turned down: the run is over, and so is its autosave
+        if (app.stT > 10) { if (!app.custom) autosave.clear(); setState('title'); break; }
         if (app.stT > 0.8 && (hit('start') || hit('jump'))) {
           // continue: same stage, fresh lives, the score starts over
           app.run = { score: 0, lives: LIVES, startScore: 0, startLives: LIVES, nextLife: 0 };
-          if (app.custom) loadCustom(app.custom); else loadStage(app.stage);
+          if (app.custom) loadCustom(app.custom); else { loadStage(app.stage); checkpoint(app.stage); }
           setState('ready');
-        } else if (app.stT > 0.8 && (hit('back') || hit('quit'))) setState(app.custom ? 'editor' : 'title');
+        } else if (app.stT > 0.8 && (hit('back') || hit('quit'))) {
+          if (!app.custom) autosave.clear();
+          setState(app.custom ? 'editor' : 'title');
+        }
         break;
       case 'ending':
         if (app.stT > 3 && (hit('start') || hit('jump'))) setState('title');
@@ -212,7 +237,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     }
     app.touch?.clear();
   }
-  const titleItems = () => ['play', 'editor', ...(onExit ? ['exit'] : [])];
+  const titleItems = () => [...(app.saved ? ['continue'] : []), 'play', 'editor', ...(onExit ? ['exit'] : [])];
   app.titleItems = titleItems;
 
   function sound() {

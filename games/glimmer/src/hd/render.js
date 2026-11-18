@@ -10,6 +10,7 @@
 //   view.draw(app);
 import { drawGlyphs, drawPrompt, glyphs, measureGlyphs } from '@nostalgia/input';
 import { fitWide } from '@nostalgia/game/runtime';
+import { savedAgo } from '@nostalgia/save';
 import { BRUSH_NAMES } from '../editor.js';
 import { BRUSHES, frame, pads, toolbar } from '../layout.js';
 import { COLS, ROWS, U, parseLevel } from '../level.js';
@@ -458,7 +459,9 @@ export function createRenderer(cv) {
   let pan = 0;
   function sceneryBackdrop(world, dt, t, dim) { pan += dt; drawBackdrop(world, dt, t, COLS / 2 + Math.sin(pan * 0.12) * 12, { dim }); }
   function menuRects(app) {
-    return app.titleItems().map((it, i) => ({ it, x: cw / 2 - 200 * u, y: 560 * u + i * 64 * u, w: 400 * u, h: 54 * u }));
+    // four entries (CONTINUE first) sit a little higher and closer, clear of the legend
+    const items = app.titleItems(), four = items.length > 3;
+    return items.map((it, i) => ({ it, x: cw / 2 - 200 * u, y: (four ? 528 : 560) * u + i * (four ? 60 : 64) * u, w: 400 * u, h: 54 * u }));
   }
   function drawTitle(app, dt) {
     const t = app.t;
@@ -470,7 +473,11 @@ export function createRenderer(cv) {
     menuRects(app).forEach((m, i) => {
       const on = i === app.menu;
       if (on) { glass(m.x, m.y, m.w, m.h, 27, 0.55); glow(g, '255,225,150', m.x + 32 * u, m.y + m.h / 2, 28 * u, 0.7); }
-      label(names[m.it], cw / 2, m.y + m.h * 0.7, on ? 32 : 27, on ? '#ffffff' : DIM, 700, 'center', 5, SERIF);
+      if (m.it === 'continue') {
+        // the checkpoint under its entry: where the run stands and how long ago
+        label('CONTINUE', cw / 2, m.y + 29 * u, on ? 27 : 24, on ? '#ffffff' : DIM, 700, 'center', 5, SERIF);
+        label(`${app.saved.label} · ${savedAgo(app.saved.at)}`, cw / 2, m.y + 47 * u, 15, on ? PAL[0].accent : 'rgba(255,255,255,0.42)', 700, 'center', 2);
+      } else label(names[m.it], cw / 2, m.y + m.h * 0.7, on ? 32 : 27, on ? '#ffffff' : DIM, 700, 'center', 5, SERIF);
     });
     const input = app.input, kb = input.device.kind === 'keyboard';
     const rows = [[['move', 'RUN'], ['climb', 'CLIMB'], ['digL', 'DIG LEFT'], ['digR', 'DIG RIGHT']], [['restart', 'GIVE UP LEVEL'], ['pause', 'PAUSE']]];

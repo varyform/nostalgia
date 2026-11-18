@@ -401,20 +401,28 @@ export function createCgaRenderer(cv) {
     rect(gx + 14, gy - 14, 2, 18, 1); rect(gx + 14, gy - 14, 8, 2, 1); // straw
     text('BRIMFUL', 78, 28, 2, 4); text('BRIMFUL', 76, 26, 3, 4);
     text('A SODA FOUNTAIN FRENZY', 78, 60, 1);
-    const items = app.titleItems(), names = { play: 'PLAY', scores: 'HIGH SCORES', exit: 'EXIT' };
+    const items = app.titleItems();
     items.forEach((it, i) => {
-      const y = 84 + i * 13, on = i === app.menu;
-      if (on) { rect(110, y - 2, 100, 11, 2); text('>', 114, y, 3); }
-      ctext(names[it], y, on ? 3 : 1);
+      const m = menuBox(app, i), on = i === app.menu;
+      if (on) { rect(m.x + 10, m.y, m.w - 20, 11, 2); text('>', m.x + 14, m.y + 2, 3); }
+      ctext(m.name, m.y + 2, on ? 3 : 1);
     });
     const input = app.input, kb = input.device.kind === 'keyboard';
     const extra = [['pause', 'PAUSE']];
     if (kb) extra.push(['sound', app.soundOn ? 'SOUND ON' : 'SOUND OFF']);
     if (app.onExit) extra.push(['quit', 'EXIT']);
-    const ly = 128 + (items.length - 2) * 8;
+    const ly = items.length > 3 ? 130 : 128 + (items.length - 2) * 8;
     [[['switch', 'COUNTER'], ['walk', 'WALK']], [['pour', 'HOLD TO FILL, LET GO TO SLIDE']], extra].forEach((r, i) => legend(input, [r], ly + i * 12, 12, i === 1 ? 3 : 1));
     if (Math.floor(t * 2) % 2) prompt(input, 'PRESS {start}', 160, 172, 2, 'center');
     ctext('FILL TO THE BRIM · CATCH EVERY EMPTY', 189, 1);
+  }
+  // a title entry's box (shared with the touch test); four entries sit closer together
+  const NAMES = { play: 'PLAY', scores: 'HIGH SCORES', exit: 'EXIT' };
+  function menuBox(app, i) {
+    const items = app.titleItems(), n = items.length, it = items[i];
+    const name = it === 'continue' ? `CONTINUE  ${app.saved?.label ?? ''}` : NAMES[it];
+    const w = Math.max(120, textWidth(name, 1) + 44);
+    return { x: Math.round((W - w) / 2), y: (n > 3 ? 74 : 82) + i * (n > 3 ? 12 : 13), w, h: n > 3 ? 12 : 13, name };
   }
   function drawScores(app, t) {
     usePal('title');
@@ -550,7 +558,7 @@ export function createCgaRenderer(cv) {
     switch (app.state) {
       case 'title': {
         const items = app.titleItems();
-        for (let i = 0; i < items.length; i++) if (inside(100, 82 + i * 13, 120, 13)) return { act: 'menu', i };
+        for (let i = 0; i < items.length; i++) { const m = menuBox(app, i); if (inside(m.x, m.y, m.w, m.h)) return { act: 'menu', i }; }
         return null;
       }
       case 'play': {

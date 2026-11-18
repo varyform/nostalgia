@@ -1,6 +1,7 @@
 'use strict';
 import { canvasPoint, fitWide, fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput, drawGlyph, measureGlyph, parsePrompt } from '@nostalgia/input';
+import { createAutosave, savedAgo } from '@nostalgia/save';
 import meta from '../game.json';
 import { createAudio } from './audio.js';
 import { createPilot } from './autopilot.js';
@@ -107,6 +108,13 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     bomb: { x: cw - 340 * u, y: ch - 110 * u, r: 70 * u },
     pause: { x: cw - 60 * u, y: 170 * u, r: 36 * u },
   });
+  // a tap or click outside play: anywhere goes on, except on the title's CONTINUE / NEW GAME menu,
+  // where it picks the button under it
+  function tapScreen(q) {
+    if (state !== 'title' || !resume) return taps.add('start');
+    const i = MENU().findIndex(b => Math.abs(q.x - cw / 2) < b.w / 2 && Math.abs(q.y - b.y) < b.h / 2);
+    if (i >= 0) { menuSel = i; taps.add('start'); }
+  }
   function onTouch(e) {
     e.preventDefault(); audioInit(); TCH.used = true;
     const b = BTN(); let stickSeen = false;
@@ -124,13 +132,13 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     if (e.type === 'touchstart') for (const t of e.changedTouches) {
       const q = tpos(t);
       if (state === 'play' && Math.hypot(q.x - b.pause.x, q.y - b.pause.y) < b.pause.r * 1.5) taps.add('pause');
-      else if (state !== 'play') { taps.add('start'); if (state === 'title' && !document.fullscreenElement && !document.webkitFullscreenElement) fullscreen(); }
+      else if (state !== 'play') { tapScreen(q); if (state === 'title' && !document.fullscreenElement && !document.webkitFullscreenElement) fullscreen(); }
       else if (paused) taps.add('pause');
     }
   }
   if (!demo) {
     ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(n => listen(cv, n, onTouch, { passive: false }));
-    listen(cv, 'mousedown', () => { audioInit(); if (state !== 'play') taps.add('start'); });
+    listen(cv, 'mousedown', e => { audioInit(); if (state !== 'play') tapScreen(tpos(e)); });
   }
   function applyTouch() {
     if (!TCH.used) return;
@@ -309,6 +317,15 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   const saved = storage('skyhook-hd-hi'); // the demo shows the high score but never saves one
   hiscore = +saved.load(0) || 0;
   function saveHi() { if (!demo && score > hiscore) { hiscore = score; saved.save(hiscore); } }
+  // the autosave, apart from the high score: a checkpoint where each mission begins, offered as the
+  // title's CONTINUE (menu 0, with NEW GAME as 1). The demo never reads, writes or clears it.
+  const autosave = createAutosave('skyhook-hd', { enabled: !demo, version: 1 });
+  let resume = autosave.load(), menuSel = 0;
+  function saveCheckpoint(m, l) {
+    autosave.save({ mi: m, loop: l, score, lives, nextLife },
+      'MISSION ' + (m + 1) + (l ? ' · TOUR ' + (l + 1) : '') + ' · ' + score.toLocaleString('en-US'));
+    resume = autosave.load();
+  }
 
   const FL = x => { x = x | 0; return lv.fl[x < 0 ? 0 : x >= lv.L ? lv.L - 1 : x]; };
   const CE = x => { if (!lv.hasCeil) return -50; x = x | 0; return lv.ce[x < 0 ? 0 : x >= lv.L ? lv.L - 1 : x]; };
@@ -339,7 +356,14 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   }
 
   function newGame() { score = 0; lives = 3; mi = 0; loop = 0; nextLife = 10000; startMission(); }
+  // the saved mission, begun again as it began
+  function continueGame() {
+    const s = resume.state;
+    score = s.score | 0; lives = s.lives | 0 || 3; mi = clamp(s.mi | 0, 0, MISSIONS.length - 1); loop = s.loop | 0; nextLife = s.nextLife | 0 || 10000;
+    startMission();
+  }
   function startMission() {
+    saveCheckpoint(mi, loop);
     diff = 1 + loop * 0.35 + mi * 0.08;
     lv = genLevel(mi); decorate(lv);
     checkpoint = lv.pads[0];
@@ -377,9 +401,11 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     const saved = lv.spies.filter(s => s.state === 'saved' || s.state === 'walk').length;
     tally = { saved, total: lv.spies.length, fuelB: Math.round(fuel) * 10, full: saved === lv.spies.length ? 2000 : 0 };
     addScore(tally.fuelB + tally.full);
+    // the next mission's checkpoint already, so closing on the tally keeps this one done
+    if (mi + 1 < MISSIONS.length) saveCheckpoint(mi + 1, loop); else saveCheckpoint(0, loop + 1);
     state = 'clear'; stT = 0; audio.engine(false); audio.sfx('fanfare'); msgs = null;
   }
-  function gameOver() { if (demo) return nextMission(); state = 'over'; stT = 0; saveHi(); audio.sfx('over'); msgs = null; }
+  function gameOver() { if (demo) return nextMission(); autosave.clear(); resume = null; state = 'over'; stT = 0; saveHi(); audio.sfx('over'); msgs = null; }
 
   // ---------- effects ----------
   let flashes = [], blooms = [];
@@ -485,7 +511,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     lv.mini = m;
   }
   function toTitle() {
-    state = 'title'; paused = false; stT = 0; audio.engine(false);
+    state = 'title'; paused = false; stT = 0; audio.engine(false); menuSel = 0;
     mi = 0; loop = 0; lv = genLevel(0); decorate(lv); p = null; camX = 0;
     bullets = []; ebul = []; bombs = []; parts = []; rings = []; pops = []; flashes = []; blooms = []; msgs = null;
   }
@@ -529,7 +555,11 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     readInput(dt); applyTouch();
     if (hit('sound')) audio.setOn(!audio.on);
     T += dt; stT += dt;
-    if (state === 'title') { camX += 26 * dt; if (camX > lv.L - W - 10) camX = 0; updateFx(dt); if (hit('start')) newGame(); else if (onExit && hit('quit')) onExit(); return; }
+    if (state === 'title') { camX += 26 * dt; if (camX > lv.L - W - 10) camX = 0; updateFx(dt);
+      if (resume && (hit('up') || hit('down'))) menuSel ^= 1;
+      if (hit('start')) { if (resume && menuSel === 0) continueGame(); else newGame(); } else if (onExit && hit('quit')) onExit();
+      return;
+    }
     if (state === 'over') { updateFx(dt); if (stT > 1 && hit('start')) toTitle(); return; }
     if (state === 'clear') {
       updateFx(dt);
@@ -1558,8 +1588,23 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
       label(v, x + 670 * u, 440 * u + i * 38 * u, 22, 'rgba(255,255,255,0.8)', 600, 'left', 2);
     });
     const a = 0.55 + 0.45 * Math.sin(T * 4);
-    g.globalAlpha = a; prompt(tapUI() ? 'TAP TO START' : 'PRESS {start} TO START', cw / 2, 720 * u, 36, '#ffffff', 700, 'center', 8); g.globalAlpha = 1;
-    label('HI ' + pad6(hiscore) + '   ·   SOUND ' + (audio.on ? 'ON' : 'OFF'), cw / 2, 780 * u, 20, 'rgba(255,255,255,0.55)', 600, 'center', 4);
+    if (resume) drawMenu(a);
+    else { g.globalAlpha = a; prompt(tapUI() ? 'TAP TO START' : 'PRESS {start} TO START', cw / 2, 720 * u, 36, '#ffffff', 700, 'center', 8); g.globalAlpha = 1; }
+    label('HI ' + pad6(hiscore) + '   ·   SOUND ' + (audio.on ? 'ON' : 'OFF'), cw / 2, (resume ? 920 : 780) * u, 20, 'rgba(255,255,255,0.55)', 600, 'center', 4);
+  }
+  // the title's CONTINUE / NEW GAME buttons (centred; y is the middle), in canvas pixels
+  const MENU = () => [{ y: 740 * u, w: 760 * u, h: 104 * u }, { y: 842 * u, w: 420 * u, h: 64 * u }];
+  function drawMenu(a) {
+    const [c, n] = MENU(), on = i => menuSel === i;
+    [c, n].forEach((b, i) => {
+      g.fillStyle = on(i) ? 'rgba(127,246,255,0.16)' : 'rgba(8,10,22,0.6)';
+      g.beginPath(); g.roundRect(cw / 2 - b.w / 2, b.y - b.h / 2, b.w, b.h, 14 * u); g.fill();
+      g.strokeStyle = on(i) ? `rgba(127,246,255,${0.4 + 0.5 * a})` : 'rgba(255,255,255,0.18)'; g.lineWidth = 2 * u; g.stroke();
+    });
+    label('CONTINUE', cw / 2, c.y - 8 * u, 36, on(0) ? '#ffffff' : 'rgba(255,255,255,0.7)', 700, 'center', 8);
+    label(resume.label + '   ·   ' + savedAgo(resume.at).toUpperCase(), cw / 2, c.y + 32 * u, 20, on(0) ? '#ffd98a' : 'rgba(255,217,138,0.6)', 600, 'center', 3);
+    label('NEW GAME', cw / 2, n.y + 10 * u, 26, on(1) ? '#ffffff' : 'rgba(255,255,255,0.7)', 700, 'center', 6);
+    if (!tapUI()) prompt('{up} {down}  ·  {start}', cw / 2, 1000 * u, 18, 'rgba(255,255,255,0.45)', 600, 'center', 3);
   }
   function drawClear() {
     const x = panel(760 * u, 420 * u, 300 * u), cx = cw / 2;

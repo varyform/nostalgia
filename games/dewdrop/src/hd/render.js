@@ -429,8 +429,15 @@ export function createRenderer(cv) {
   }
   let pan = 0;
   function sceneryBackdrop(world, dt, t) { pan += dt; drawBackdrop(world, dt, t, 16 + Math.sin(pan * 0.15) * 14); }
+  // with an autosave the menu opens on a taller CONTINUE (its stage and score under it)
   function menuRects(app) {
-    return app.titleItems().map((it, i) => ({ it, x: cw / 2 - 180 * u, y: 520 * u + i * 66 * u, w: 360 * u, h: 56 * u }));
+    const items = app.titleItems(), cont = items[0] === 'continue';
+    let y = (cont ? 506 : 520) * u;
+    return items.map(it => {
+      const w = (it === 'continue' ? 520 : 360) * u, h = (it === 'continue' ? 78 : cont ? 52 : 56) * u, r = { it, x: cw / 2 - w / 2, y, w, h };
+      y += h + (cont ? 6 : 10) * u;
+      return r;
+    });
   }
   function drawTitle(app, dt) {
     const t = app.t;
@@ -440,11 +447,12 @@ export function createRenderer(cv) {
     logo(250 * u, 190, t);
     label('A MOONLIT GARDEN CAPER', cw / 2, 310 * u, 24, PAL[0].accent, 600, 'center', 8);
     mascot(cw / 2, 470 * u, 62 * u, t);
-    const names = { play: 'PLAY', editor: 'STAGE EDITOR', exit: 'EXIT' };
-    menuRects(app).forEach((m, i) => {
-      const on = i === app.menu;
+    const names = { continue: 'CONTINUE', play: 'PLAY', editor: 'STAGE EDITOR', exit: 'EXIT' }, rects = menuRects(app);
+    rects.forEach((m, i) => {
+      const on = i === app.menu, cont = m.it === 'continue';
       if (on) { glass(m.x, m.y, m.w, m.h, 28, 0.55); glow(g, 'dew', m.x + 30 * u, m.y + m.h / 2, 30 * u, 0.6); }
-      label(names[m.it], cw / 2, m.y + m.h * 0.7, on ? 34 : 28, on ? '#ffffff' : DIM, 700, 'center', 4);
+      label(names[m.it], cw / 2, m.y + m.h * (cont ? 0.52 : 0.7), on ? 34 : 28, on ? '#ffffff' : DIM, 700, 'center', 4);
+      if (cont) label(`${app.saved.label}  ·  ${app.savedAgo()}`.toUpperCase(), cw / 2, m.y + m.h * 0.84, 18, on ? PAL[0].accent : DIM, 600, 'center', 3);
     });
     const input = app.input, kb = input.device.kind === 'keyboard';
     const rows = [[['move', 'MOVE'], ['jump', 'JUMP', true], ['climb', 'CLIMB']], [['drop', 'DROP THROUGH'], ['pause', 'PAUSE']]];
@@ -452,7 +460,7 @@ export function createRenderer(cv) {
     if (kb) extra.push(['sound', 'SOUND'], ['fullscreen', 'FULL SCREEN']);
     if (app.onExit) extra.push(['quit', 'EXIT']);
     if (extra.length) rows.push(extra);
-    legend(input, rows, cw / 2, 780 * u, 48, 21);
+    legend(input, rows, cw / 2, (rects[0]?.it === 'continue' ? 796 : 780) * u, 48, 21);
     prompt(input, 'PRESS {start}', cw / 2, 960 * u, 30, `rgba(255,215,106,${pulse(t)})`, 'center', 700);
     const total = Object.values(app.save.best).reduce((a, b) => a + b, 0), done = Object.keys(app.save.best).length;
     label(`GARDENS CLEARED ${done}/${STAGES.length}    BEST TOTAL ${pad6(total)}    SOUND ${app.soundOn ? 'ON' : 'OFF'}`, cw / 2, 1040 * u, 18, 'rgba(255,255,255,0.45)', 600, 'center', 3);
