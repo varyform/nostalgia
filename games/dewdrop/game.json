@@ -1,0 +1,53 @@
+{
+  "title": "Dewdrop",
+  "exe": "DEWDROP.EXE",
+  "after": "Nuts & Milk",
+  "year": 1984,
+  "genre": "Single-screen platform puzzler",
+  "tags": ["Platform", "Puzzle", "Single-screen"],
+  "blurb": "Dew, a drop of moonlit water, fell from the Great Lily in a storm. Each night she gathers every glowberry in a garden to wake the moonbloom that carries her one garden closer to home, while grumpy thorn-burrs roll, pace and hop after her.",
+  "facts": [
+    ["Gardens", "Mossy Hollow, Whisper Reeds, Thornwood, Moon Pond"],
+    ["Stages", "24, plus your own in the editor"],
+    ["Input", "Keyboard, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "jump": { "keys": ["Space", "KeyZ", "ArrowUp"], "pad": ["South"], "touch": "Tap" },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"] },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"] },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "restart": { "keys": ["KeyR"], "pad": ["North"] },
+      "edit": { "keys": ["KeyE"], "pad": ["West"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "move": { "keys": ["Arrows"], "pad": ["LStick"] },
+      "climb": { "keys": ["ArrowsV"], "pad": ["DpadV"] },
+      "drop": { "keys": ["ArrowDown"], "pad": ["Down"] },
+      "pick": { "keys": ["Arrows"], "pad": ["Dpad"] }
+    }
+  },
+  "controls": [
+    ["move", "Move"],
+    ["jump", "Jump"],
+    ["climb", "Climb"],
+    ["drop", "Drop through"],
+    ["pause", "Pause"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · 16:9 · vector",
+      "note": "Moonlit vector art with soft glow and parallax. Unlocked stages and best scores are saved in the browser."
+    }
+  ]
+}
