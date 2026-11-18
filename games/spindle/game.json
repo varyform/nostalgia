@@ -1,0 +1,55 @@
+{
+  "title": "Spindle",
+  "exe": "SPINDLE.EXE",
+  "after": "Nebulus",
+  "year": 1987,
+  "genre": "Tower-climbing platformer",
+  "tags": ["Platform", "Action", "Rotating tower"],
+  "blurb": "The old sea spindles are waking and the tide comes with them. Clink, a pocket-sized brass diving bell, climbs each one round and round its turning walls, up stairs, over gaps, through tunnels and onto lifts, past urchins, jellyfish and door crabs, to wind it back down into the sea before the time runs out.",
+  "facts": [
+    ["Towers", "8, then they come round again faster"],
+    ["Bonus", "Kite Run between towers: catch the sea-glass"],
+    ["Scores", "Top eight, initials and the highest tower saved in the browser"],
+    ["Input", "Keyboard, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "jump": { "keys": ["Space", "KeyZ"], "pad": ["South"], "touch": "Tap" },
+      "fire": { "keys": ["KeyX", "ControlLeft"], "pad": ["West", "R2"], "touch": "Tap" },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"] },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"] },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "walk": { "keys": ["ArrowsH"], "pad": ["DpadH"] },
+      "enter": { "keys": ["ArrowUp"], "pad": ["Up"] },
+      "ride": { "keys": ["ArrowsV"], "pad": ["DpadV"] },
+      "steer": { "keys": ["ArrowsV"], "pad": ["DpadV"] },
+      "letters": { "keys": ["Arrows"], "pad": ["Dpad"] }
+    }
+  },
+  "controls": [
+    ["walk", "Walk round the tower"],
+    ["jump", "Jump"],
+    ["fire", "Bubble"],
+    ["enter", "Go through a doorway"],
+    ["ride", "Ride a lift"],
+    ["pause", "Pause"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · 16:9 · vector",
+      "note": "A lit, turning stone cylinder over a moving sea, its reflection in the swell, sky and far islands drifting by. High scores are saved in the browser."
+    }
+  ]
+}

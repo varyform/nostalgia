@@ -1,0 +1,54 @@
+{
+  "title": "Glimmer",
+  "exe": "GLIMMER.EXE",
+  "after": "Lode Runner",
+  "year": 1983,
+  "genre": "Puzzle platformer",
+  "tags": ["Puzzle", "Platform", "Single-screen"],
+  "blurb": "Wren, a lantern diver, slips into a drowned city to gather the glimmers its builders left behind. She cannot jump, but her coral pick opens a hole in any living brick, and the stone sentinels that still walk the halls fall right in after her. Gather every glimmer and the rising stair carries her out.",
+  "facts": [
+    ["Reaches", "The Shallows, Coral Vaults, Amber Catacombs, Abyssal Spire"],
+    ["Levels", "32, plus your own in the editor"],
+    ["Input", "Keyboard, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "digL": { "keys": ["KeyZ", "Comma"], "pad": ["West", "L1"], "touch": "◀ DIG" },
+      "digR": { "keys": ["KeyX", "Period"], "pad": ["East", "R1"], "touch": "DIG ▶" },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"] },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"] },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "restart": { "keys": ["KeyR"], "pad": ["North"] },
+      "edit": { "keys": ["KeyE"], "pad": ["West"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "move": { "keys": ["ArrowsH"], "pad": ["DpadH"], "touch": "Drag" },
+      "climb": { "keys": ["ArrowsV"], "pad": ["DpadV"], "touch": "Drag" },
+      "pick": { "keys": ["Arrows"], "pad": ["Dpad"] }
+    }
+  },
+  "controls": [
+    ["move", "Run, hand over hand"],
+    ["climb", "Climb, let go"],
+    ["digL", "Dig down-left"],
+    ["digR", "Dig down-right"],
+    ["restart", "Give up the level"],
+    ["pause", "Pause"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · 16:9 · vector",
+      "note": "Lamplit vector ruins under four seas, with glowing glimmers and drifting light. Reached levels and best scores are saved in the browser."
+    }
+  ]
+}
