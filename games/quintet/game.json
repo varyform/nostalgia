@@ -1,0 +1,53 @@
+{
+  "title": "Quintet",
+  "exe": "QUINTET.EXE",
+  "after": "Color Lines",
+  "year": 1992,
+  "genre": "Line-up puzzle",
+  "tags": ["Puzzle", "Turn-based", "Single-screen"],
+  "blurb": "A lacquered board and a jar of hand-blown glass. Roll a marble along any open path; five of a colour in a row, any way, shatter into light. Miss, and three more grow where the seeds glow. Keep the board from filling.",
+  "facts": [
+    ["Board", "9 × 9, seven glass colours and a rare prism"],
+    ["Scoring", "Long rows pay steeply; crosses and streaks multiply"],
+    ["Extras", "Seeds shown a turn ahead, take-backs, autosave"],
+    ["Input", "Mouse, touch, keyboard, gamepad"]
+  ],
+  "input": {
+    "actions": {
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "select": { "keys": ["Enter", "Space"], "pad": ["South"], "touch": "Tap" },
+      "deselect": { "keys": ["Backspace", "KeyX"], "pad": ["East"], "touch": "Tap it again" },
+      "undo": { "keys": ["KeyU", "KeyZ"], "pad": ["West"], "touch": "UNDO" },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"] },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"] },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "aim": { "keys": ["Arrows"], "pad": ["Dpad"], "touch": "Tap" },
+      "click": { "keys": ["MouseLeft"], "touch": "Tap" },
+      "letters": { "keys": ["Arrows"], "pad": ["Dpad"] }
+    }
+  },
+  "controls": [
+    ["click", "Pick a marble, then its cell"],
+    ["aim", "Move the cursor"],
+    ["select", "Pick up, set down"],
+    ["undo", "Take back a move"],
+    ["pause", "Pause"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · 16:9 · vector",
+      "note": "Lamplit glass on black lacquer, landscape or portrait. Saves scores, stats and the game in progress."
+    }
+  ]
+}
