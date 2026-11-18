@@ -46,7 +46,7 @@ function audio() {
   if (!prefs.sound || !activated) return null;
   try {
     ac ??= new (window.AudioContext || window.webkitAudioContext)();
-    if (ac.state === 'suspended') ac.resume();
+    if (ac.state !== 'running' && ac.state !== 'closed') ac.resume(); // iOS: also 'interrupted'
   } catch {
     return null;
   }

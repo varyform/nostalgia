@@ -48,7 +48,7 @@ describe('createSynth', () => {
     expect(log).toEqual([]);
   });
 
-  it('unlocks once; later gestures only resume a suspended context', () => {
+  it('unlocks once; later gestures only resume a stopped context', () => {
     const { audio, log } = setup();
     audio.unlock();
     const n = log.length;
@@ -59,6 +59,9 @@ describe('createSynth', () => {
     rec.suspend();
     audio.unlock();
     expect(log.slice(n)).toEqual([`${log[0].split('=')[0]}.resume()`]);
+    rec.suspend('interrupted'); // iOS, after a call or another app
+    audio.unlock();
+    expect(log.slice(n)).toEqual([`${log[0].split('=')[0]}.resume()`, `${log[0].split('=')[0]}.resume()`]);
   });
 
   it('survives a browser without audio, and tries again on the next gesture', () => {

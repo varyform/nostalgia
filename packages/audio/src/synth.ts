@@ -138,7 +138,8 @@ export function createSynth<T extends { bpm: number }, M extends object = object
 
   function unlock() {
     if (ac) {
-      if (ac.state === 'suspended') void ac.resume().catch(() => {});
+      // not only 'suspended': iOS leaves it 'interrupted' (a call, Siri, another app) until told
+      if (ac.state !== 'running' && ac.state !== 'closed') void ac.resume().catch(() => {});
       return;
     }
     try {

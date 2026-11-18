@@ -21,7 +21,7 @@ export interface Recorder {
   /** Replace AudioContext, setInterval / clearInterval and Math.random; returns the undo. */
   install(): () => void;
   /** Suspend the newest context, as a browser does before a user gesture. */
-  suspend(): void;
+  suspend(state?: 'suspended' | 'interrupted'): void;
   /** Advance the clock by ms and run every live interval, n times. */
   tick(n?: number, ms?: number): void;
   /** Checksums of every buffer made so far, freshly computed. */
@@ -206,7 +206,7 @@ export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder 
     readonly sampleRate = sampleRate;
     readonly destination: MockNode;
     readonly id: number;
-    state: 'running' | 'suspended' | 'closed' = 'running';
+    state: 'running' | 'suspended' | 'interrupted' | 'closed' = 'running';
     constructor() {
       if (rec.failNext) {
         rec.failNext = false;
@@ -290,8 +290,9 @@ export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder 
         Math.random = random;
       };
     },
-    suspend() {
-      contexts[contexts.length - 1].state = 'suspended';
+    /** The browser stops the context: 'suspended', or iOS's 'interrupted'. */
+    suspend(state: 'suspended' | 'interrupted' = 'suspended') {
+      contexts[contexts.length - 1].state = state;
     },
     tick(n = 1, ms = 40) {
       for (let k = 0; k < n; k++) {
