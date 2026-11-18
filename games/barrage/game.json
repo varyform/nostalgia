@@ -1,0 +1,67 @@
+{
+  "title": "Barrage",
+  "exe": "BARRAGE.EXE",
+  "after": "Scorched Earth",
+  "year": 1991,
+  "genre": "Turn-based artillery",
+  "tags": ["Strategy", "Artillery", "Hot-seat"],
+  "blurb": "Up to eight crawler tanks dig in across a hillside that will not survive the afternoon. Read the wind, set the barrel and the charge, and fire. Craters open, earth slides, burning gel runs downhill, and the cash you win buys bigger shells for the next round.",
+  "facts": [
+    ["Tanks", "2 to 8, people and computers in any mix"],
+    ["Arsenal", "18 weapons, 7 kinds of gear"],
+    ["Fields", "Hills, peaks, mesas, islands, dunes, canyons"],
+    ["Input", "Keyboard, mouse, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "left": { "keys": ["ArrowLeft"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight"], "pad": ["Right", "LStickRight"] },
+      "up": { "keys": ["ArrowUp"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown"], "pad": ["Down", "LStickDown"] },
+      "coarse": { "keys": ["ShiftLeft", "ShiftRight"], "pad": ["L2"] },
+      "powerUp": { "keys": ["PageUp"], "pad": ["RStickUp"] },
+      "powerDown": { "keys": ["PageDown"], "pad": ["RStickDown"] },
+      "fire": { "keys": ["Space"], "pad": ["South", "R2"], "touch": "FIRE" },
+      "next": { "keys": ["Tab", "Period"], "pad": ["R1"], "touch": "Tap the weapon" },
+      "prev": { "keys": ["Comma"], "pad": ["L1"] },
+      "items": { "keys": ["KeyI", "KeyG"], "pad": ["North"], "touch": "GEAR" },
+      "driveLeft": { "keys": ["KeyA"] },
+      "driveRight": { "keys": ["KeyD"] },
+      "drive": { "keys": ["KeyA", "KeyD"], "pad": ["West"] },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "sell": { "keys": ["Backspace", "Delete", "KeyX"], "pad": ["West"] },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"] },
+      "back": { "keys": ["Escape"], "pad": ["East"] },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "aim": { "keys": ["ArrowsH"], "pad": ["DpadH"], "touch": "Drag" },
+      "power": { "keys": ["ArrowsV"], "pad": ["DpadV"], "touch": "Drag" },
+      "move": { "keys": ["AD"], "pad": ["West"] },
+      "pick": { "keys": ["Arrows"], "pad": ["Dpad"] },
+      "rows": { "keys": ["ArrowsV"], "pad": ["DpadV"] },
+      "change": { "keys": ["ArrowsH"], "pad": ["DpadH"] }
+    }
+  },
+  "controls": [
+    ["aim", "Swing the barrel"],
+    ["power", "Charge"],
+    ["coarse", "Hold for big steps"],
+    ["fire", "Fire"],
+    ["next", "Next weapon"],
+    ["items", "Shields and gear"],
+    ["move", "Drive (needs fuel)"],
+    ["pause", "Pause"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · 16:9 · vector",
+      "note": "Lit vector battlefields in seven skies, glowing blasts and sliding earth. Your last setup and match records are saved in the browser."
+    }
+  ]
+}
