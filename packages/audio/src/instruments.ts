@@ -85,6 +85,7 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
  */
 export function adsr(p: AudioParam, t: number, end: number, peak: number, a: Required<Adsr>): number {
   const top = t + Math.max(0.001, a.attack);
+  p.value = 0; // silent before t too: a source can start a fraction of a sample early
   p.setValueAtTime(0, t);
   p.linearRampToValueAtTime(peak, top);
   p.setTargetAtTime(peak * clamp01(a.sustain), top, Math.max(0.001, a.decay) / 3);

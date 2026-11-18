@@ -555,6 +555,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     readInput(dt); applyTouch();
     if (hit('sound')) audio.setOn(!audio.on);
     T += dt; stT += dt;
+    audio.music(state === 'title' ? 'title' : state === 'play' && !paused ? lv.M.kind : null);
     if (state === 'title') { camX += 26 * dt; if (camX > lv.L - W - 10) camX = 0; updateFx(dt);
       if (resume && (hit('up') || hit('down'))) menuSel ^= 1;
       if (hit('start')) { if (resume && menuSel === 0) continueGame(); else newGame(); } else if (onExit && hit('quit')) onExit();
@@ -592,6 +593,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
       if (jetT <= 0) { jetT = rnd(0.6, 1.4) * lv.M.jets / diff; spawnJet(); }
     }
     audio.throttle(p.vx, p.landed);
+    audio.mood(fuel, p.aboard.length);
   }
 
   function updatePlayer(dt) {

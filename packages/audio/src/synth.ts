@@ -300,6 +300,9 @@ export function createSynth<T extends { bpm: number }, M extends object = object
   const busNode = (b: Target): AudioNode =>
     b === 'music' ? musicBus! : b === 'sfx' ? sfxBus! : 'fx' in b ? b.fx!.input : b;
   function env(g: GainNode, t: number, a: number, peak: number, dur: number) {
+    // silent until t: a source can start a fraction of a sample early, and a gain still at its
+    // default 1 then lets one sample through at full level, a click
+    g.gain.value = 0;
     if (a > 0) {
       g.gain.setValueAtTime(floor, t);
       g.gain.exponentialRampToValueAtTime(peak, t + a);

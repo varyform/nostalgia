@@ -1,12 +1,15 @@
 // Procedural sound on the shared engine, all original tunes: a lilting title air, three
 // climbing themes that take turns tower by tower, a breezy kite tune, and jingles for the
-// crown, the time running out and the end. Pulse lead, soft arpeggio, triangle bass and a
-// noise kit, with a little echo for the sea air. The context is only made by unlock(), which
-// the page calls from a user gesture; the demo never makes one.
+// crown, the time running out and the end. Each tune has its own band (LOOK): the lead on an
+// FM piano, PWM pulses, a supersaw or bells, a supersaw pad that fills in over the second
+// half, an arpeggio, a sub bass and a kit, through a dotted-eighth echo for the sea air and a
+// compressor that holds the tunes level with each other. The jingles and effects keep their
+// chiptune voices. The context is only made by unlock(), which the page calls from a user
+// gesture; the demo never makes one.
 //
 //   const audio = createAudio({ on: true });
 //   audio.unlock(); audio.music('climb1'); audio.sfx('jump'); audio.setOn(false);
-import { createSynth, line, midi, span } from '@nostalgia/audio';
+import { compressor, createSynth, delay, distortion, line, midi, span } from '@nostalgia/audio';
 
 const CH = { M: [0, 4, 7, 12], m: [0, 3, 7, 12] };
 // 16 steps a bar, one chord a bar; lead: note numbers, '.' rest, '-' hold
@@ -56,23 +59,75 @@ const TRACKS = {
   },
 };
 
+// How each tune is played: the lead's instrument (keys: FM piano, pulse, saw: a thin
+// supersaw, bell) and what doubles it, the pad's level and brightness, the arpeggio's voice,
+// how hard the bass is driven, and the kit (soft for the title).
+const LOOK = {
+  title: { lead: 'keys', double: 'pulse', pad: 0.016, cutoff: 900, arp: 'bell', drive: 0.1, soft: true },
+  climb1: { lead: 'pulse', double: 'keys', pad: 0.013, cutoff: 1400, arp: 'bell', drive: 0.3 },
+  climb2: { lead: 'pulse', double: 'bell', pad: 0.015, cutoff: 1000, arp: 'pulse', drive: 0.25 },
+  climb3: { lead: 'saw', grit: true, pad: 0.013, cutoff: 1800, arp: 'pulse', drive: 0.5 },
+  bonus: { lead: 'bell', double: 'pulse', pad: 0.012, cutoff: 2200, arp: 'pulse', drive: 0.3 },
+};
+for (const [name, tr] of Object.entries(TRACKS)) tr.look = LOOK[name];
+const MAKEUP = -6; // dB, after the compressor: the tunes at the level they had
+
 export function createAudio({ on = true } = {}) {
   return createSynth({
-    on, seed: 31, tracks: TRACKS, pulse: true, attack: 0.005, startDelay: 0.06, echo: { time: 0.21, feedback: 0.28, wet: 0.22, cut: 2600 },
+    on, seed: 31, tracks: TRACKS, pulse: true, attack: 0.005, startDelay: 0.06,
     levels: { master: 0.55, music: 0.3, sfx: 0.72 },
-    arrange: ({ tone, hiss, notes, hold }) => {
+    inserts: { music: ac => compressor(ac, { threshold: -34, ratio: 3, knee: 8, attack: 0.012, release: 0.25, makeup: MAKEUP }) },
+    arrange: v => {
+      const { tone, hiss, notes, hold, sub, supersaw, pulse, fm } = v;
       const jingle = (t, secs) => hold(t + secs);
+      // the sea air: a dotted-eighth echo, darker each time, a little right of centre
+      const space = v.insert(ac => delay(ac, { time: 0.3, feedback: 0.34, wet: 0.24, cut: 2600, pan: 0.3 }));
+      const grit = v.insert(ac => distortion(ac, { amount: 0.45, ceiling: 0.05, mix: 0.5 }), space);
+      // one note of the lead on an instrument; d is its length, vol scales it (a doubling is quieter)
+      const play = (what, n, t, d, vol, tr, bus = space) => {
+        const f = midi(n);
+        if (what === 'keys') fm(f, t, d, 0.075 * vol, { ratio: 1, index: 2, modDecay: 0.3, modSustain: 0.25, decay: 0.7, sustain: 0.4, release: 0.25, bus });
+        if (what === 'bell') fm(midi(n + 12), t, d + 0.3, 0.04 * vol, { ratio: 3.5, index: 2.2, modDecay: 0.25, modSustain: 0.1, decay: 0.6, sustain: 0.15, release: 0.4, bus });
+        if (what === 'pulse')
+          pulse(f, t, d, 0.06 * vol, { width: (0.5 - tr.duty) / 0.45, pwm: 0.5, rate: 0.5, cutoff: 1500, envmod: 2000, reso: 0.2, decay: 0.3, sustain: 0.65, release: 0.1, bus });
+        if (what === 'saw') supersaw(f, t, d, 0.04 * vol, { detune: 0.2, mix: 0.35, width: 0.5, cutoff: 2000, envmod: 2400, reso: 0.15, attack: 0.008, decay: 0.25, sustain: 0.6, release: 0.15, bus });
+      };
       return {
         step(tr, i, t, dt) {
-          const [root, kind] = tr.bars[Math.floor(i / 16) % tr.bars.length], s = i % 16, ch = CH[kind];
+          const bars = tr.bars.length, bar = Math.floor(i / 16) % bars, s = i % 16,
+            [root, kind] = tr.bars[bar], ch = CH[kind], look = tr.look,
+            full = bars < 8 || bar >= bars / 2; // the second half of the tune fills in
+          if (s === 0) {
+            space.fx?.time.setTargetAtTime(dt * 3, t, 0.05); // in time with the tune
+            for (const iv of ch.slice(0, 3))
+              supersaw(midi(root + 12 + iv), t, dt * 15, look.pad * (full ? 1 : 0.55), {
+                attack: dt * 4, decay: dt * 8, sustain: 0.8, release: dt * 6, cutoff: look.cutoff * (full ? 1 : 0.7),
+                envmod: 800, detune: 0.35, mix: 0.65, width: 0.9, bus: space,
+              });
+          }
           const n = tr.lead[i % tr.lead.length];
-          if (n > 0) tone(midi(n), midi(n), t, dt * span(tr.lead, i, 8) * 0.95, 0.07, tr.duty, 'music');
-          if (tr.bass[s] === 'x') tone(midi(root - 12), midi(root - 12), t, dt * 1.8, 0.15, 'triangle', 'music');
-          if (s % 2 === 1) { const f = midi(root + 12 + ch[((s - 1) / 2) % 4]); tone(f, f, t, dt * 0.9, 0.026, 0.5, 'music'); }
-          const d = tr.drums[s];
-          if (d === 'k') tone(150, 45, t, 0.11, 0.2, 'sine', 'music');
-          if (d === 's') hiss(t, 0.09, 0.07, 5500, 1400, 'bandpass', 'music');
-          if (d === 'h') hiss(t, 0.025, 0.03, 9000, 7000, 'highpass', 'music');
+          if (n > 0) {
+            const d = dt * span(tr.lead, i, 8) * 0.95;
+            play(look.lead, n, t, d, 1, tr, look.grit ? grit : space);
+            if (look.double && full) play(look.double, n, t, d, 0.4, tr);
+          }
+          if (tr.bass[s] === 'x')
+            sub(midi(root - 12), t, dt * 1.6, 0.2, { punch: 4, drop: 0.03, drive: look.drive, tone: 700 + 1600 * look.drive, decay: 0.25, sustain: 0.5, release: 0.05 });
+          if (s % 2 === 1) {
+            const a = root + 12 + ch[((s - 1) / 2) % 4];
+            if (look.arp === 'bell') fm(midi(a + 12), t, dt * 1.5, full ? 0.016 : 0.011, { ratio: 3.5, index: 1.2, modDecay: 0.2, decay: 0.35, sustain: 0.1, release: 0.25, bus: space });
+            else pulse(midi(a), t, dt * 0.9, full ? 0.026 : 0.018, { width: 0.5, cutoff: 900, envmod: 2600, decay: dt, sustain: 0.2, release: 0.05, bus: space });
+          }
+          // the kit; a snare run into the top of the tune on its last bar
+          const roll = !look.soft && bar === bars - 1 && s >= 12;
+          const d = roll ? 's' : tr.drums[s], soft = look.soft ? 0.6 : 1;
+          if (d === 'k') sub(54, t, 0.14, 0.3 * soft, { punch: 24, drop: 0.04, drive: 0.5, tone: 3500, decay: 0.16, sustain: 0, release: 0.04 });
+          if (d === 's') {
+            hiss(t, 0.12, (roll ? 0.03 + 0.008 * (s - 12) : 0.07) * soft, 6000, 1400, 'bandpass', 'music', 0.9);
+            if (!roll) tone(210, 150, t, 0.06, 0.04 * soft, 'triangle', 'music');
+          }
+          if (d === 'h') hiss(t, 0.025, 0.028 * soft, 10000, 7500, 'highpass', 'music');
+          else if (full && !look.soft && s % 4 === 2) hiss(t, 0.1, 0.016, 9000, 6000, 'highpass', 'music');
         },
         effects: {
           jump: t => tone(330, 720, t, 0.11, 0.05, 0.25),

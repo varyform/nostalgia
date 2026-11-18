@@ -229,6 +229,23 @@ describe('createSynth', () => {
   });
 });
 
+describe('envelopes', () => {
+  it('hold a voice silent from the moment it is made, not only from its start', () => {
+    const { audio, log } = setup();
+    audio.unlock();
+    rec.time = 1;
+    const from = log.length;
+    audio.sfx('beep');
+    const g = log
+      .slice(from)
+      .find(l => l.endsWith('=createGain()'))!
+      .split('=')[0];
+    const own = log.slice(from).filter(l => l.startsWith(`${g}.gain`));
+    expect(own[0]).toBe(`${g}.gain=0`);
+    expect(own[1]).toMatch(/setValueAtTime/);
+  });
+});
+
 describe('notes', () => {
   it('midi, line, seq and span', () => {
     expect(midi(69)).toBe(440);
