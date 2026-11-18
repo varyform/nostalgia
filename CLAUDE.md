@@ -73,6 +73,10 @@ the mechanics. `game.json` credits the original in `after` + `year`.
 - Browsers only headless and muted: `~/.local/share/chrome-headless-shell/chrome-headless-shell --headless
   --mute-audio --force-device-scale-factor=2`. Never open a visible window; only a test of full-screen mode may run
   headed. No sound, ever.
+- Start browsers only through `scripts/headless.js` (`launch()` → `page()` / `eval()` / `close()`): it sets the
+  flags above and closes the browser however the script ends — error, interrupt, `kill -9` (a watchdog), or after
+  `maxLife`. Never spawn the browser by hand. `mise run reap` closes any orphaned ones; run it after a session of
+  tests.
 - Headless iframes stall `requestAnimationFrame`: launcher-flow harnesses replace it with timers.
 - Harness scripts go in the session scratchpad, not the repo. Don't screenshot-verify visuals for the user.
 - Verifying a game or a game change, closest first:
