@@ -1,0 +1,58 @@
+{
+  "title": "Brimful",
+  "exe": "BRIMFUL.EXE",
+  "after": "Tapper",
+  "year": 1983,
+  "genre": "Serving action",
+  "tags": ["Action", "Arcade", "Single-screen"],
+  "blurb": "Pip runs the soda fountain at four counters at once. Fill each glass to the brim, slide it to a thirsty customer before they reach your end, and catch every empty that comes sliding back, from a seaside pier to a café on the Moon.",
+  "facts": [
+    ["Venues", "Pier Parlour, Snowcap Lodge, Lantern Market, Crater Café"],
+    ["Screens", "12, then the tour repeats faster"],
+    ["Bonus", "Order Up! memory round between venues"],
+    ["Input", "Keyboard, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "pour": { "keys": ["Space", "KeyZ"], "pad": ["South", "R2"], "touch": "Hold" },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"] },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"] },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "switch": { "keys": ["ArrowsV"], "pad": ["DpadV"], "touch": "Tap a counter" },
+      "walk": { "keys": ["ArrowsH"], "pad": ["DpadH"] },
+      "pads": { "keys": ["Arrows"], "pad": ["Dpad"] },
+      "letters": { "keys": ["Arrows"], "pad": ["Dpad"] }
+    }
+  },
+  "controls": [
+    ["switch", "Change counter"],
+    ["walk", "Walk along it"],
+    ["pour", "Hold to fill, release to slide"],
+    ["pause", "Pause"]
+  ],
+  "versions": [
+    {
+      "key": "cga",
+      "label": "CGA",
+      "entry": "index.html",
+      "tag": "CGA · 320×200 · 4 colours",
+      "note": "Four colours per venue, the backdrop colour swapped the way CGA allowed. High scores are saved in the browser."
+    },
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "modern.html",
+      "tag": "HD · 16:9 · vector",
+      "note": "Widescreen remaster: lit vector venues, fizz and sparkle, bouncy characters, touch controls."
+    }
+  ]
+}
