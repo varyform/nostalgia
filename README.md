@@ -48,6 +48,7 @@ selects, A / ✕ runs, and the key hints turn into the pad's buttons.
 | `launcher/`       | Launcher source                                            |
 | `packages/input/` | `@nostalgia/input`, the shared input module (below)        |
 | `packages/audio/` | `@nostalgia/audio`, the shared sound engine (below)        |
+| `packages/save/`  | `@nostalgia/save`, the autosave behind CONTINUE (below)    |
 | `packages/game/`  | `@nostalgia/game`, the game folder contract (below)        |
 | `dist/`           | Compiled pages, committed: one HTML file per game version  |
 
@@ -127,6 +128,22 @@ audio.sfx('jump', event);
 
 The API is documented in `packages/audio/src/index.ts`; `packages/audio/src/mock.ts` records a run against a fake Web
 Audio for tests.
+
+## Autosave: `@nostalgia/save`
+
+Every game keeps one checkpoint and offers CONTINUE on its title while one exists. A checkpoint is what it takes to
+begin the current level, tower or round again as it began (stage, score, lives, …), saved when that stage starts and
+cleared on game over or when the game is beaten. Quitting mid-stage resumes from the stage's start. Demo mode never
+touches it.
+
+```js
+import { createAutosave, savedAgo } from '@nostalgia/save';
+
+const autosave = createAutosave('quarry', { enabled: !demo, version: 1 });
+autosave.save({ level: 4, score: 12340, lives: 2 }, 'Level 5 · 12,340'); // at each stage's start
+const saved = autosave.load(); // { state, label, at } or null → CONTINUE  Level 5 · 12,340  (savedAgo(saved.at))
+autosave.clear(); // game over, or the game beaten
+```
 
 ## Adding a game
 

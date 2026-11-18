@@ -21,6 +21,9 @@ importers:
       '@nostalgia/input':
         specifier: workspace:*
         version: link:packages/input
+      '@nostalgia/save':
+        specifier: workspace:*
+        version: link:packages/save
     devDependencies:
       '@types/node':
         specifier: ^24.19.2
@@ -40,6 +43,8 @@ importers:
   packages/game: {}
 
   packages/input: {}
+
+  packages/save: {}
 
 packages:
 
