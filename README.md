@@ -112,6 +112,9 @@ glyph.
 Each game's `src/audio.js` holds its score: the tracks, how one 16th step is played, and the effects. The engine makes
 the context on the first user gesture, the music and effects buses, a seeded noise buffer, the voices (`tone`, `hiss`,
 `fm`, `notes`) and a look-ahead sequencer. Options give pulse-wave duty cycles, a PC-speaker voicing and a music echo.
+For richer scores there are `sub` (a punchy, clipped sub bass), `supersaw` (seven detuned saws in stereo), `pulse` (PWM
+pulses) and `fm` with an options object (an index envelope), each one note with an ADSR through an enveloped filter
+where it has one: `v.supersaw(midi(60), t, dt * 4, 0.08, { cutoff: 2400 })`.
 
 ```js
 import { createSynth, line, midi, span } from '@nostalgia/audio';

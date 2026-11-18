@@ -39,6 +39,13 @@
  *   tone(f0, f1, t, dur, vol, type = 'square', bus, attack)   one oscillator, f0 → f1
  *   hiss(t, dur, vol, f0 = 3000, f1 = 300, filter = 'lowpass', bus, q, attack = 0.004)   filtered noise
  *   fm(f, t, dur, vol, ratio = 2, index = 2, bus = 'music')   two-operator FM
+ *
+ * The richer voices (instruments.ts), each one note with an ADSR (attack, decay, sustain,
+ * release: held until t + dur, then released) and a bus (default 'music'):
+ *   sub(f, t, dur, vol, { punch, drop, drive, tone })          a sine punched down onto f, clipped
+ *   supersaw(f, t, dur, vol, { detune, mix, width, cutoff, reso, envmod })   seven saws in stereo
+ *   pulse(f, t, dur, vol, { width, pwm, rate, detune, cutoff, reso, envmod })   PWM pulses
+ *   fm(f, t, dur, vol, { ratio, fine, index, modDecay, modSustain })   FM with an index envelope
  *   notes(midiList, t, gap, dur, vol, type, bus)               a run of tones, 0 = rest
  *   hold(until)                                                music waits until then (a jingle)
  *   env(gain, t, attack, peak, dur), ac, noise, bus.{master,music,sfx}   for custom graphs
@@ -65,4 +72,13 @@ export {
   type Voices,
   type Wave,
 } from './synth.ts';
+export {
+  adsr,
+  type Adsr,
+  type FmOptions,
+  type PulseOptions,
+  type SubOptions,
+  type SupersawOptions,
+  type VoiceOptions,
+} from './instruments.ts';
 export { line, midi, seq, span } from './notes.ts';

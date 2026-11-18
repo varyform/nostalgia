@@ -1,6 +1,8 @@
 // The engine: an AudioContext made on the first user gesture, three gain buses, a noise
 // buffer, the voices (tone, hiss, fm, notes) and a 16th-step look-ahead sequencer. What a
 // game plays (its tracks, the arrangement of one step, its effects) comes from arrange().
+import * as inst from './instruments.ts';
+import type { FmOptions, PulseOptions, SubOptions, SupersawOptions } from './instruments.ts';
 import { midi } from './notes.ts';
 
 /** An oscillator shape, or a pulse duty cycle (0.125, 0.25, 0.5) when the synth has `pulse`. */
@@ -40,8 +42,21 @@ export interface Voices {
     q?: number,
     attack?: number,
   ) => void;
-  /** Two-operator FM: a sine carrier at f, modulated at f × ratio with a decaying index. */
-  fm: (f: number, t: number, dur: number, vol: number, ratio?: number, index?: number, bus?: Bus) => void;
+  /**
+   * Two-operator FM: a sine carrier at f, modulated at f × ratio with a decaying index. With an
+   * options object instead of the ratio: fine detune, the index's own envelope and an ADSR
+   * (instruments.ts).
+   */
+  fm: {
+    (f: number, t: number, dur: number, vol: number, ratio?: number, index?: number, bus?: Bus): void;
+    (f: number, t: number, dur: number, vol: number, options: FmOptions): void;
+  };
+  /** A sub bass: a sine punched up at the start, dropping to f, through a soft clipper. */
+  sub: (f: number, t: number, dur: number, vol: number, options?: SubOptions) => void;
+  /** Seven detuned saws spread in stereo, through a lowpass the envelope opens. */
+  supersaw: (f: number, t: number, dur: number, vol: number, options?: SupersawOptions) => void;
+  /** Two pulse waves with their width swept by an LFO (PWM), through an enveloped lowpass. */
+  pulse: (f: number, t: number, dur: number, vol: number, options?: PulseOptions) => void;
   /** MIDI notes `gap` seconds apart (0 = rest), each a tone of `dur`. */
   notes: (list: readonly number[], t: number, gap: number, dur: number, vol: number, type?: Wave, bus?: Bus) => void;
   /** Keep the music quiet until context time `until` (a jingle has the floor); it then resumes. */
@@ -288,7 +303,30 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     s.start(t, Math.random());
     s.stop(t + dur + tail);
   }
-  function fm(f: number, t: number, dur: number, vol: number, ratio = 2, index = 2, bus: Bus = 'music') {
+  // the richer voices (instruments.ts); the PC speaker plays them as plain squares
+  const kit = (): inst.Kit => ({ ac: ac!, out: busNode, tail });
+  const square = (f: number, t: number, dur: number, vol: number, o?: { bus?: Bus; release?: number }) =>
+    tone(f, f, t, dur + (o?.release ?? 0), vol, 0.5, o?.bus ?? 'music');
+  const sub = (f: number, t: number, dur: number, vol: number, o?: SubOptions) =>
+    speaker ? square(f, t, dur, vol, o) : inst.sub(kit(), f, t, dur, vol, o);
+  const supersaw = (f: number, t: number, dur: number, vol: number, o?: SupersawOptions) =>
+    speaker ? square(f, t, dur, vol, o) : inst.supersaw(kit(), f, t, dur, vol, o);
+  const pulseVoice = (f: number, t: number, dur: number, vol: number, o?: PulseOptions) =>
+    speaker ? square(f, t, dur, vol, o) : inst.pulse(kit(), f, t, dur, vol, o);
+  function fm(
+    f: number,
+    t: number,
+    dur: number,
+    vol: number,
+    ratio: number | FmOptions = 2,
+    index = 2,
+    bus: Bus = 'music',
+  ) {
+    if (typeof ratio === 'object') {
+      if (speaker) square(f, t, dur, vol, ratio);
+      else inst.fm(kit(), f, t, dur, vol, ratio);
+      return;
+    }
     const c = ac!.createOscillator(),
       m = ac!.createOscillator(),
       mg = ac!.createGain(),
@@ -332,7 +370,10 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     env,
     tone,
     hiss,
-    fm,
+    fm: fm as Voices['fm'],
+    sub,
+    supersaw,
+    pulse: pulseVoice,
     notes,
     hold,
   };

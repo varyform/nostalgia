@@ -41,7 +41,8 @@ the mechanics. `game.json` credits the original in `after` + `year`.
 - `@nostalgia/game/runtime` — `listeners()`, `fixedLoop()`, `fitWide()` / `fitPixels()`, `storage()`,
   `toggleFullscreen()`, `canvasPoint()`.
 - `@nostalgia/input` — `createInput` from `game.json`'s `input`; glyphs follow the last device (keyboard, pad, touch).
-- `@nostalgia/audio` — `createSynth`; context made on the first user gesture; respects `sound`; `M` toggles.
+- `@nostalgia/audio` — `createSynth`; context made on the first user gesture; respects `sound`; `M` toggles. Voices:
+  `tone`, `hiss`, `fm`, `notes`, and for richer scores `sub`, `supersaw`, `pulse` and `fm(…, { options })`.
 - `@nostalgia/save` — the autosave (below).
 - A change a game needs in a package goes in the package (with tests), not in a local copy.
 

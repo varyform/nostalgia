@@ -161,6 +161,30 @@ export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder 
       this.prop('type', v);
     }
   }
+  class MockPanner extends MockNode {
+    readonly pan = this.param('pan', 0);
+  }
+  class MockConstant extends MockSource {
+    readonly offset = this.param('offset', 1);
+  }
+  class MockShaper extends MockNode {
+    #curve: Float32Array | null = null;
+    #oversample = 'none';
+    get curve() {
+      return this.#curve;
+    }
+    set curve(c: Float32Array | null) {
+      this.#curve = c;
+      log.push(`#${this.id}.curve=${c ? `[${c.length}]` : 'null'}`);
+    }
+    get oversample() {
+      return this.#oversample;
+    }
+    set oversample(v: string) {
+      this.#oversample = v;
+      this.prop('oversample', v);
+    }
+  }
   class MockDelay extends MockNode {
     readonly delayTime = this.param('delayTime', 0);
   }
@@ -249,6 +273,15 @@ export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder 
     }
     createDelay(max = 1) {
       return this.#make('createDelay', new MockDelay(this), [max]);
+    }
+    createStereoPanner() {
+      return this.#make('createStereoPanner', new MockPanner(this));
+    }
+    createConstantSource() {
+      return this.#make('createConstantSource', new MockConstant(this));
+    }
+    createWaveShaper() {
+      return this.#make('createWaveShaper', new MockShaper(this));
     }
     createDynamicsCompressor() {
       return this.#make('createDynamicsCompressor', new MockCompressor(this));
