@@ -1,0 +1,25 @@
+#!/bin/sh
+# Build the iOS wrapper with the current dist/ (fonts inlined, so it runs offline) and run it.
+#   ios/run              on a phone or iPad: IOS_DEVICE (its UDID, from
+#                        `xcrun devicectl list devices`), the Duo unless set
+#   ios/run --sim [name] in the simulator (default "iPhone Duo"), booted without a window
+set -eu
+cd "$(dirname "$0")"
+node ../scripts/offline.js build/offline/dist
+xcodegen generate --quiet
+
+if [ "${1:-}" = "--sim" ]; then
+  sim="${2:-iPhone Duo}"
+  xcodebuild -project Nostalgia.xcodeproj -scheme Nostalgia -sdk iphonesimulator \
+    -destination "platform=iOS Simulator,name=$sim" -derivedDataPath build -quiet build
+  xcrun simctl boot "$sim" 2>/dev/null || true
+  xcrun simctl install "$sim" build/Build/Products/Debug-iphonesimulator/Nostalgia.app
+  xcrun simctl launch --terminate-running-process "$sim" info.varyform.nostalgia
+  exit
+fi
+
+device="${IOS_DEVICE:-00008160-00022C401883400A}" # the Duo
+xcodebuild -project Nostalgia.xcodeproj -scheme Nostalgia -destination "id=$device" \
+  -derivedDataPath build -allowProvisioningUpdates -quiet build
+xcrun devicectl device install app --device "$device" build/Build/Products/Debug-iphoneos/Nostalgia.app
+xcrun devicectl device process launch --terminate-existing --device "$device" info.varyform.nostalgia

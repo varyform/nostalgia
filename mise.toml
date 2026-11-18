@@ -2,6 +2,7 @@
 node = "24.22.3"
 pnpm = "12.21.0"
 "gem:kamal" = "2.12.0"
+xcodegen = "2.47.0"
 
 [env]
 _.path = ["./node_modules/.bin"]
@@ -45,3 +46,7 @@ run = "kamal deploy"
 [tasks.reap]
 description = "Close headless test browsers whose script is gone"
 run = "node scripts/headless.js --reap"
+
+[tasks.ios]
+description = "Build the iOS wrapper with dist/ and run it on the Duo (IOS_DEVICE: another UDID), or: mise run ios -- --sim"
+run = "ios/run"

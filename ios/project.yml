@@ -1,0 +1,47 @@
+# The iOS wrapper: one full-screen web view over the bundled dist/ (ios/Nostalgia/App.swift).
+# XcodeGen makes Nostalgia.xcodeproj from this (gitignored); `mise run ios` builds and runs it.
+name: Nostalgia
+options:
+  deploymentTarget:
+    iOS: '17.0'
+settings:
+  base:
+    PRODUCT_BUNDLE_IDENTIFIER: info.varyform.nostalgia
+    DEVELOPMENT_TEAM: 535S292559
+    CODE_SIGN_STYLE: Automatic
+    TARGETED_DEVICE_FAMILY: '1,2'
+    SWIFT_VERSION: '6.0'
+    MARKETING_VERSION: '1.0'
+    CURRENT_PROJECT_VERSION: '1'
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+targets:
+  Nostalgia:
+    type: application
+    platform: iOS
+    sources:
+      - Nostalgia
+      - AppIcon.icon
+      # dist/ with its fonts inlined (ios/run makes it with scripts/offline.js): a folder
+      # reference, copied whole into the app as dist/, so the games run without internet.
+      - path: build/offline/dist
+        type: folder
+        buildPhase: resources
+    info:
+      path: Info.plist # generated, gitignored
+      properties:
+        CFBundleDisplayName: Nostalgia
+        UILaunchScreen:
+          UIColorName: ''
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        UIApplicationSupportsIndirectInputEvents: true
+        ITSAppUsesNonExemptEncryption: false
+        UISupportedInterfaceOrientations:
+          [UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight, UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad:
+          [
+            UIInterfaceOrientationLandscapeLeft,
+            UIInterfaceOrientationLandscapeRight,
+            UIInterfaceOrientationPortrait,
+            UIInterfaceOrientationPortraitUpsideDown,
+          ]

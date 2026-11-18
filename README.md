@@ -74,6 +74,12 @@ Commit `dist/` together with the sources it was built from.
 `mise run deploy` (Kamal, `config/deploy.yml`) serves `dist/` with nginx at https://ogg.ol3h.org, from the server
 `px.kamal`. Kamal builds the image from the committed HEAD, not the working tree, so build and commit `dist/` first.
 
+## iOS
+
+`mise run ios` builds `ios/` (XcodeGen + xcodebuild) with the current `dist/` inside and runs it on a phone
+(`IOS_DEVICE`, a UDID); `mise run ios -- --sim` uses the simulator. One full-screen web view serves the bundled pages
+from `nostalgia://localhost/`, offline, with sound through the silent switch.
+
 ## Shared input: `@nostalgia/input`
 
 Each game registers its actions with keyboard/mouse and gamepad bindings; the module reads keyboard, mouse buttons and
