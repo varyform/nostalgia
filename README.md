@@ -31,13 +31,13 @@ selects, A / ✕ runs, and the key hints turn into the pad's buttons.
 
 ## Layout
 
-| Path              | What                                                          |
-| ----------------- | ------------------------------------------------------------- |
-| `games/<game>/`   | Game sources: one HTML page per version + `src/*.js`          |
-| `launcher/`       | Launcher source                                               |
-| `packages/input/` | `@nostalgia/input`, the shared input module (below)           |
-| `pages.config.js` | Every page: its source entry and the compiled file it becomes |
-| `dist/`           | Compiled pages, committed: one HTML file per game version     |
+| Path              | What                                                       |
+| ----------------- | ---------------------------------------------------------- |
+| `games/<game>/`   | A game: `game.json`, one HTML page per version, `src/*.js` |
+| `launcher/`       | Launcher source                                            |
+| `packages/input/` | `@nostalgia/input`, the shared input module (below)        |
+| `packages/game/`  | `@nostalgia/game`, the game folder contract (below)        |
+| `dist/`           | Compiled pages, committed: one HTML file per game version  |
 
 ## Develop
 
@@ -83,8 +83,19 @@ glyph.
 
 ## Adding a game
 
-1. Put its sources in `games/<game>/`.
-2. Add its pages to `pages.config.js` (source entry → `dist/<game>.html`).
-3. Add an entry to `GAMES` in `launcher/src/main.js`: executable name, versions (page + preview scene), controls and
-   blurb. Optionally draw a preview in `SCENES`: it gets a 2D context and the time in seconds and draws a 320×200 frame
-   (`mode: 'cga'` renders at real resolution and scales up with hard pixels; `'hd'` draws vectors at native resolution).
+A game is a folder in `games/`; the build and the launcher find it by its `game.json`. Nothing else lists it.
+
+| File             | What                                                                                                                 |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `game.json`      | Title, executable, original + year, genre, tags, blurb, facts, input bindings, controls the launcher lists, versions |
+| `<entry>.html`   | One page per version (`versions[].entry`)                                                                            |
+| `src/preview.js` | `export default (canvas, { version, reducedMotion }) => ({ stop })`: the game's own loop in attract mode             |
+
+- The game builds its `createInput` from `game.json`'s `input`, so the launcher shows exactly the keys and buttons it
+  plays with. `controls` lists `[action, label]` pairs from it.
+- The preview runs the real game on a canvas the launcher owns: autopilot, no input listeners (`createInput({ …,
+  register: false })`), no sound, no storage, no DOM outside the canvas. `stop()` releases everything.
+- Each version compiles to one file: `dist/<game>.html`, or `dist/<game>-<version>.html` when there are several.
+  `mise run build <game>-<version>` builds one.
+
+Types: `packages/game/src/meta.ts`.

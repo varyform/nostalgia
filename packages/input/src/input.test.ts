@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { createInput, familyOf, glyphsFor, keyName, parsePrompt, type InputOptions } from './index.ts';
+import { createInput, currentInput, familyOf, glyphsFor, keyName, parsePrompt, type InputOptions } from './index.ts';
 
 type Pad = { id: string; connected: boolean; buttons: { pressed: boolean; value: number }[]; axes: number[] };
 const pad = (id = 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)'): Pad => ({
@@ -97,6 +97,12 @@ describe('keyboard', () => {
     key('keydown', 'ArrowRight');
     input.update();
     expect(input.axis('left', 'right')).toBe(1);
+  });
+
+  it('only registered inputs drive the glyphs', () => {
+    const { input } = setup();
+    setup({ register: false });
+    expect(currentInput()).toBe(input);
   });
 
   it('mouse buttons bind like keys', () => {

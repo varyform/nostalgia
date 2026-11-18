@@ -1,0 +1,58 @@
+{
+  "title": "Dropzone",
+  "exe": "DROPZONE.EXE",
+  "after": "Airborne Ranger",
+  "year": 1988,
+  "genre": "Paratrooper stealth",
+  "tags": ["Stealth", "Top-down", "Tactical"],
+  "blurb": "Jump from a transport plane, drop your supply pods and steer the canopy down behind the lines. Slip past vision cones and minefields, hit the objective, then make the helicopter before extraction closes.",
+  "facts": [
+    ["Operations", "Glass Ear, Paper Lantern, Dry Thunder"],
+    ["Difficulty", "Recruit, Veteran, Elite"]
+  ],
+  "input": {
+    "actions": {
+      "up": { "keys": ["KeyW", "ArrowUp"], "pad": ["LStickUp"] },
+      "down": { "keys": ["KeyS", "ArrowDown"], "pad": ["LStickDown"] },
+      "left": { "keys": ["KeyA", "ArrowLeft"], "pad": ["LStickLeft"] },
+      "right": { "keys": ["KeyD", "ArrowRight"], "pad": ["LStickRight"] },
+      "sprint": { "keys": ["ShiftLeft", "ShiftRight"], "pad": ["L3"] },
+      "fire": { "keys": ["MouseLeft"], "pad": ["R2"] },
+      "grenade": { "keys": ["KeyG", "MouseRight"], "pad": ["R1"] },
+      "charge": { "keys": ["KeyF"], "pad": ["L1"] },
+      "reload": { "keys": ["KeyR"], "pad": ["West"] },
+      "crouch": { "keys": ["KeyC"], "pad": ["East"] },
+      "prone": { "keys": ["KeyZ", "KeyX"], "pad": ["North"] },
+      "interact": { "keys": ["KeyE"], "pad": ["South"] },
+      "medkit": { "keys": ["KeyH"], "pad": ["Down"] },
+      "map": { "keys": ["Tab"], "pad": ["Select"] },
+      "pod": { "keys": ["KeyQ"], "pad": ["West"] },
+      "jump": { "keys": ["Space"], "pad": ["South"] },
+      "pause": { "keys": ["Escape", "KeyP"], "pad": ["Start"] },
+      "back": { "keys": ["Escape"] },
+      "mute": { "keys": ["KeyM"] }
+    },
+    "display": {
+      "move": { "keys": ["WASD"], "pad": ["LStick"] },
+      "aim": { "keys": ["Mouse"], "pad": ["RStick"] },
+      "steer": { "keys": ["AD"], "pad": ["LStickH"] }
+    }
+  },
+  "controls": [
+    ["move", "Move"],
+    ["aim", "Aim"],
+    ["fire", "Fire"],
+    ["grenade", "Grenade"],
+    ["crouch", "Crouch"],
+    ["prone", "Prone"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · procedural world",
+      "note": "Keyboard and mouse, or a gamepad. Best scores are saved in the browser."
+    }
+  ]
+}

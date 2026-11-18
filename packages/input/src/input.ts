@@ -41,6 +41,8 @@ export interface InputOptions {
   preventDefault?: boolean | string[];
   /** Poll pads on every animation frame instead of from the game loop (DOM menus). */
   autoUpdate?: boolean;
+  /** Make this the input <input-glyph> elements follow (default). False for previews and other embeds. */
+  register?: boolean;
   /** Injected for tests. */
   getGamepads?: () => (Gamepad | null)[];
 }
@@ -387,8 +389,10 @@ export function createInput(opts: InputOptions): Input {
       if (current === input) current = null;
     },
   };
-  current = input;
-  currentListeners.forEach(fn => fn(input));
+  if (opts.register !== false) {
+    current = input;
+    currentListeners.forEach(fn => fn(input));
+  }
   return input;
 }
 

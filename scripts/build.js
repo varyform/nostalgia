@@ -1,7 +1,10 @@
 // Build every page (or the ones named) into dist/ as its own Vite run, in parallel:
 // single-file output needs one entry per build.
 import { spawn } from 'node:child_process';
-import { PAGES } from '../pages.config.js';
+import { fileURLToPath } from 'node:url';
+import { discoverPages } from '@nostalgia/game/node';
+
+const PAGES = discoverPages(fileURLToPath(new URL('..', import.meta.url)));
 
 const names = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(PAGES);
 const unknown = names.filter(n => !PAGES[n]);

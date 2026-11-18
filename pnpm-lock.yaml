@@ -12,6 +12,9 @@ importers:
 
   .:
     dependencies:
+      '@nostalgia/game':
+        specifier: workspace:*
+        version: link:packages/game
       '@nostalgia/input':
         specifier: workspace:*
         version: link:packages/input
@@ -28,6 +31,8 @@ importers:
       vite-plus:
         specifier: 1.7.0
         version: 1.7.0(@types/node@24.19.2)(@vitest/ui@5.1.0)
+
+  packages/game: {}
 
   packages/input: {}
 

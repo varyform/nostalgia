@@ -1,0 +1,56 @@
+{
+  "title": "Skyhook",
+  "exe": "SKYHOOK.EXE",
+  "after": "Striker",
+  "year": 1985,
+  "genre": "Helicopter rescue shooter",
+  "tags": ["Action", "Side-scroller", "Rescue"],
+  "blurb": "Fly a gunship through hills, caverns, an occupied city and an iron fortress. Land beside agents to pick them up, bomb prison huts to free the rest, and get them home before the fuel runs dry.",
+  "facts": [
+    ["Missions", "5, then the tour repeats harder"],
+    ["Input", "Keyboard, gamepad, touch (HD)"]
+  ],
+  "input": {
+    "actions": {
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "fire": { "keys": ["Space", "KeyZ"], "pad": ["South", "R2"] },
+      "bomb": { "keys": ["KeyX", "KeyB"], "pad": ["West", "East", "L2"] },
+      "start": { "keys": ["Space", "Enter"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"], "touch": "Tap" },
+      "restart": { "keys": ["KeyR"], "pad": ["North"] },
+      "quit": { "keys": ["KeyQ"], "pad": ["Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "fly": { "keys": ["Arrows"], "pad": ["LStick"] },
+      "lift": { "keys": ["ArrowUp"], "pad": ["LStickUp"], "touch": "Drag up" }
+    }
+  },
+  "controls": [
+    ["fly", "Fly"],
+    ["fire", "Fire"],
+    ["bomb", "Bomb"],
+    ["pause", "Pause"],
+    ["fullscreen", "Fullscreen"]
+  ],
+  "versions": [
+    {
+      "key": "cga",
+      "label": "CGA",
+      "entry": "index.html",
+      "tag": "CGA · 320×200 · 4 colours",
+      "note": "The original look: four colours, shown at 4:3."
+    },
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "modern.html",
+      "tag": "HD · 16:9 · vector",
+      "note": "Widescreen remaster: lighting, parallax, route map, touch."
+    }
+  ]
+}

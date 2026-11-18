@@ -202,13 +202,17 @@ const KEY_NAMES: Record<string, string> = {
 
 let layout: Map<string, string> | null = null;
 /** Ask the browser for the real keyboard layout (Chromium), so KeyQ reads "A" on AZERTY. */
-export async function loadKeyboardLayout(): Promise<void> {
-  try {
-    const kb = (navigator as Navigator & { keyboard?: { getLayoutMap(): Promise<Map<string, string>> } }).keyboard;
-    if (kb?.getLayoutMap) layout = await kb.getLayoutMap();
-  } catch {
-    /* not allowed here (iframe, permissions): keep QWERTY names */
-  }
+// asked once per page: every input (and every launcher preview) shares the answer
+let layoutQuery: Promise<void> | null = null;
+export function loadKeyboardLayout(): Promise<void> {
+  return (layoutQuery ??= (async () => {
+    try {
+      const kb = (navigator as Navigator & { keyboard?: { getLayoutMap(): Promise<Map<string, string>> } }).keyboard;
+      if (kb?.getLayoutMap) layout = await kb.getLayoutMap();
+    } catch {
+      /* not allowed here (iframe, permissions): keep QWERTY names */
+    }
+  })());
 }
 
 export function keyName(code: string): string {

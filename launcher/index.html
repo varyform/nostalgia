@@ -11,7 +11,10 @@
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=VT323&display=swap"
+      rel="stylesheet"
+    />
     <style>
       @layer reset, tokens, base, layout, components, overlays, utilities;
 
@@ -379,6 +382,7 @@
         .preview canvas {
           width: 100%;
           height: 100%;
+          object-fit: contain;
         }
         .preview::after {
           content: '';
@@ -785,7 +789,6 @@
         <section class="window window--detail" id="detail" aria-labelledby="detail-title">
           <h2 class="window__title" id="detail-title"></h2>
           <div class="preview">
-            <canvas id="preview" aria-hidden="true"></canvas>
             <span class="preview__tag" id="preview-tag"></span>
           </div>
           <div class="info" id="info"></div>

@@ -2,10 +2,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite-plus';
 import { viteSingleFile } from 'vite-plugin-singlefile';
-import { PAGES } from './pages.config.js';
+import { discoverPages } from '@nostalgia/game/node';
 
+const PAGES = discoverPages(import.meta.dirname);
 const name = process.env.PAGE;
-const page = name ? PAGES[name as keyof typeof PAGES] : undefined;
+const page = name ? PAGES[name] : undefined;
 if (name && !page) throw new Error(`Unknown PAGE "${name}". Known: ${Object.keys(PAGES).join(', ')}`);
 
 // Copy the inlined HTML out of the scratch build dir to its place in dist/.
