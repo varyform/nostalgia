@@ -1,3 +1,5 @@
 build/
+.build/
+.swiftpm/
 Nostalgia.xcodeproj/
 Info.plist
