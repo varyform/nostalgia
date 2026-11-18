@@ -115,6 +115,14 @@ function moveBar() {
   const r = rows[index];
   bar.style.height = r.offsetHeight + 'px';
   bar.style.translate = `0 ${r.offsetTop}px`;
+  // the list scrolls inside its window on short screens: keep the selection in sight
+  const box = list.parentElement;
+  if (box.scrollHeight > box.clientHeight) {
+    const top = r.offsetTop,
+      bottom = top + r.offsetHeight;
+    if (top < box.scrollTop) box.scrollTop = top;
+    else if (bottom > box.scrollTop + box.clientHeight) box.scrollTop = bottom - box.clientHeight;
+  }
 }
 const version = g => g.versions.find(v => v.key === prefs.versions[g.id]) ?? g.versions[0];
 
@@ -161,14 +169,16 @@ function renderDetail() {
     $('#preview-tag').textContent = 'NO SIGNAL';
     stage.show(g);
     info.innerHTML = `
-      <div class="info__main">
-        <h3 class="info__title">Drive A:</h3>
-        <p class="info__meta">No disk in drive</p>
+      <div class="info__desc">
+        <div class="info__head">
+          <h3 class="info__title">Drive A:</h3>
+          <p class="info__meta">No disk in drive</p>
+        </div>
         <p class="info__blurb">The next remake goes in this slot.</p>
-      </div>
-      <div class="info__side">
-        <p class="info__error">Not ready reading drive A\nAbort, Retry, Fail?</p>
-        <div class="actions"><button class="btn btn--run" data-action="run">Retry</button></div>
+        <div class="info__foot">
+          <p class="info__error">Not ready reading drive A\nAbort, Retry, Fail?</p>
+          <div class="actions"><button class="btn btn--run" data-action="run">Retry</button></div>
+        </div>
       </div>`;
     return;
   }
@@ -176,29 +186,34 @@ function renderDetail() {
   $('#detail-title').textContent = `${dos(g.id)}\\${g.exe}`;
   $('#preview-tag').textContent = v.tag;
   stage.show(g, v);
+  // the controls go beside the preview; the description, facts, version and Run below it
   info.innerHTML = `
-    <div class="info__main">
-      <h3 class="info__title">${g.title}</h3>
-      <p class="info__meta">${g.genre} · in the spirit of ${g.after} (${g.year})</p>
-      <ul class="chips">${g.tags.map(t => `<li class="chip">${t}</li>`).join('')}</ul>
-      <p class="info__blurb">${g.blurb}</p>
-      ${pairs(g.facts)}
+    <div class="info__controls">
+      <p class="label">Controls</p>
+      ${pairs(g.controls.map(([action, label]) => [controlGlyph(g, action), label]))}
     </div>
-    <div class="info__side">
-      <div>
-        <p class="label">Controls</p>
-        ${pairs(g.controls.map(([action, label]) => [controlGlyph(g, action), label]))}
-      </div>
-      <div>
-        <p class="label" id="version-label">Version</p>
-        <div class="seg" role="radiogroup" aria-labelledby="version-label">
-          ${g.versions.map(x => `<button class="seg__btn" role="radio" aria-checked="${x === v}" data-version="${x.key}">${x.label}</button>`).join('')}
+    <div class="info__desc">
+      <div class="info__head">
+        <h3 class="info__title">${g.title}</h3>
+        <div class="info__line">
+          <p class="info__meta">${g.genre} · in the spirit of ${g.after} (${g.year})</p>
+          <ul class="chips">${g.tags.map(t => `<li class="chip">${t}</li>`).join('')}</ul>
         </div>
-        <p class="seg__note">${v.note}</p>
       </div>
-      <div class="actions">
-        <button class="btn btn--run" data-action="run">▶ Run ${g.exe}</button>
-        <a class="btn btn--ghost" href="${REPO}${g.id}" target="_blank" rel="noopener">Source</a>
+      <p class="info__blurb">${g.blurb}</p>
+      <div class="info__facts">${pairs(g.facts)}</div>
+      <div class="info__foot">
+        <div class="info__version">
+          <p class="label" id="version-label">Version</p>
+          <div class="seg" role="radiogroup" aria-labelledby="version-label">
+            ${g.versions.map(x => `<button class="seg__btn" role="radio" aria-checked="${x === v}" data-version="${x.key}">${x.label}</button>`).join('')}
+          </div>
+          <p class="seg__note">${v.note}</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn--run" data-action="run">▶ Run ${g.exe}</button>
+          <a class="btn btn--ghost" href="${REPO}${g.id}" target="_blank" rel="noopener">Source</a>
+        </div>
       </div>
     </div>`;
 }

@@ -159,32 +159,50 @@
       }
 
       @layer layout {
+        /* one screen, never a page scroll: the desk gets what the menu and key bars leave, the
+           preview takes the slack, and the game list and the info scroll inside their windows */
         .screen {
-          min-height: 100dvh;
+          height: 100dvh;
+          overflow: hidden;
           display: grid;
-          grid-template-rows: auto 1fr auto;
+          grid-template-rows: auto minmax(0, 1fr) auto;
         }
         .desk {
           width: 100%;
-          max-width: 1320px;
+          max-width: 1680px;
+          min-height: 0;
           margin-inline: auto;
-          padding: 44px 32px 36px;
+          padding: clamp(14px, 4.5vh, 44px) 32px clamp(18px, 4vh, 36px);
           display: grid;
-          grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+          grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+          grid-template-rows: minmax(0, 1fr);
           gap: 44px 40px;
-          align-items: start;
         }
         .desk__side {
+          min-height: 0;
           display: grid;
-          gap: 44px;
+          grid-template-rows: minmax(0, 1fr) auto;
+          gap: clamp(20px, 4.5vh, 44px);
         }
+        /* short screens: the README note goes, the list keeps the room */
+        @media (max-height: 960px) {
+          .window--note {
+            display: none;
+          }
+        }
+        /* narrow screens stack the windows; the desk scrolls between the pinned bars */
         @media (max-width: 860px) {
           .desk {
             grid-template-columns: minmax(0, 1fr);
+            grid-template-rows: none;
+            align-content: start;
+            overflow-y: auto;
+            overscroll-behavior: contain;
             padding: 32px 16px 24px;
             gap: 36px;
           }
           .desk__side {
+            grid-template-rows: none;
             gap: 36px;
           }
         }
@@ -270,9 +288,35 @@
           border-top: 1px dashed var(--color-line);
           color: var(--color-ink-muted);
         }
-        .window--detail {
+        .window--list {
+          min-height: 0;
           display: grid;
-          gap: 24px;
+          grid-template-rows: minmax(0, 1fr) auto;
+        }
+        /* the preview with the controls beside it; below, the description with the version and
+           Run beside it. The preview takes whatever height the rest leaves. */
+        .window--detail {
+          min-height: 0;
+          container: detail / inline-size;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(220px, 30%);
+          /* the top row never gets shorter than the controls; the description gets what is left
+             and scrolls inside when even that is not enough */
+          grid-template-rows: minmax(min-content, 1fr) minmax(0, max-content);
+          grid-template-areas: 'preview controls' 'desc desc';
+          gap: clamp(12px, 2.4vh, 22px) 28px;
+        }
+        @media (max-width: 860px) {
+          .window--list {
+            min-height: auto;
+            grid-template-rows: none;
+          }
+          .window--detail {
+            min-height: auto;
+            grid-template-columns: minmax(0, 1fr);
+            grid-template-rows: none;
+            grid-template-areas: 'preview' 'controls' 'desc';
+          }
         }
         .window--note p + p {
           margin-top: 0.6em;
@@ -312,7 +356,17 @@
         /* ---------- game list ---------- */
         .games-wrap {
           position: relative;
+          min-height: 0;
           margin-inline: -10px;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          scrollbar-width: thin;
+          scrollbar-color: var(--color-line) transparent;
+        }
+        @media (max-width: 860px) {
+          .games-wrap {
+            overflow: visible;
+          }
         }
         .games {
           position: relative;
@@ -375,8 +429,17 @@
         }
 
         /* ---------- preview ---------- */
+        .preview-fit {
+          grid-area: preview;
+          min-height: 150px;
+          container-type: size;
+          display: grid;
+          justify-items: center;
+          align-items: start;
+        }
         .preview {
           position: relative;
+          width: min(100cqw, 100cqh * 16 / 10);
           aspect-ratio: 16 / 10;
           overflow: hidden;
           background: var(--black);
@@ -439,24 +502,129 @@
         }
 
         /* ---------- details ---------- */
+        /* the info's parts are placed straight into the detail window's grid */
         .info {
-          display: grid;
-          grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-          gap: 24px 32px;
+          display: contents;
         }
-        .info__main,
-        .info__side {
-          display: grid;
-          gap: 16px;
-          align-content: start;
+        @media (max-width: 860px) {
+          .preview-fit {
+            container-type: inline-size;
+            min-height: auto;
+          }
+          .preview {
+            width: 100%;
+          }
         }
-        @media (max-width: 1100px) {
-          .info {
+        /* the description block: its columns line up with the preview and the controls */
+        .info__desc {
+          grid-area: desc;
+          min-height: 0;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          scrollbar-width: thin;
+          scrollbar-color: var(--color-line) transparent;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(220px, 30%);
+          grid-template-areas: 'head head' 'blurb foot' 'facts foot';
+          align-items: start;
+          gap: clamp(12px, 2.4vh, 22px) 28px;
+        }
+        @media (max-width: 860px) {
+          .info__desc {
+            overflow: visible;
             grid-template-columns: minmax(0, 1fr);
+            grid-template-areas: 'head' 'blurb' 'foot' 'facts';
+          }
+        }
+        .info__head {
+          grid-area: head;
+          display: grid;
+          gap: 8px;
+        }
+        .info__line {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 6px 16px;
+        }
+        .info__blurb {
+          grid-area: blurb;
+        }
+        .info__controls {
+          grid-area: controls;
+          align-self: start;
+        }
+        .info__facts {
+          grid-area: facts;
+          font-size: 0.85em;
+        }
+        .info__facts .pairs {
+          gap: 3px 12px;
+        }
+        .info__facts dt {
+          color: var(--color-ink-muted);
+        }
+        /* the version switch and its note, then Run */
+        .info__foot {
+          grid-area: foot;
+          display: grid;
+          align-content: start;
+          gap: 12px;
+        }
+        .info__version {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 4px 14px;
+        }
+        .info__version .label {
+          margin: 0;
+        }
+        .info__version .seg__note {
+          flex-basis: 100%;
+          margin: 0;
+        }
+        /* short screens keep the preview: the facts go first, and the blurb takes their room */
+        @media (max-height: 820px) and (min-width: 861px) {
+          .info__facts {
+            display: none;
+          }
+          .info__desc {
+            grid-template-areas: 'head head' 'blurb foot';
+          }
+        }
+        /* and tighter type and spacing below 800 px */
+        @media (max-height: 800px) and (min-width: 861px) {
+          .window--detail,
+          .info__desc {
+            row-gap: 10px;
+          }
+          .info__head {
+            gap: 4px;
+          }
+          .info__title {
+            font-size: 2em;
+          }
+          .info__blurb {
+            font-size: 0.9em;
+            line-height: 1.15;
+          }
+          .info__controls .pairs {
+            row-gap: 2px;
+          }
+          .info__controls .label {
+            margin-bottom: 2px;
+          }
+        }
+        /* a narrow side column: just the switch and Run */
+        @container detail (max-width: 700px) {
+          .info__foot .seg__note,
+          .info__foot .btn--ghost {
+            display: none;
           }
         }
         .info__title {
-          font-size: 3.2em;
+          font-size: clamp(2.2em, 5.5vh, 3.2em);
           font-weight: normal;
           line-height: 0.85;
           letter-spacing: 0.03em;
@@ -819,8 +987,10 @@
 
         <section class="window window--detail" id="detail" aria-labelledby="detail-title">
           <h2 class="window__title" id="detail-title"></h2>
-          <div class="preview">
-            <span class="preview__tag" id="preview-tag"></span>
+          <div class="preview-fit">
+            <div class="preview">
+              <span class="preview__tag" id="preview-tag"></span>
+            </div>
           </div>
           <div class="info" id="info"></div>
         </section>
