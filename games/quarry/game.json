@@ -1,0 +1,55 @@
+{
+  "title": "Quarry",
+  "exe": "QUARRY.EXE",
+  "after": "Digger",
+  "year": 1983,
+  "genre": "Tunnelling maze action",
+  "tags": ["Action", "Maze", "Single-screen"],
+  "blurb": "Steer a little rock drill through eight strata of soil. Gather every gem, shove ore crates down on the cave grubs and pick up the gold they spill, and when the miner's lamp comes out of the den, turn round and chase the grubs back.",
+  "facts": [
+    ["Levels", "8, then they cycle harder"],
+    ["Scores", "Top ten, initials saved in the browser"],
+    ["Input", "Keyboard, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "fire": { "keys": ["Space", "KeyZ", "KeyX"], "pad": ["South", "West", "R2"], "touch": "Tap" },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"] },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"] },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "move": { "keys": ["Arrows"], "pad": ["LStick"] }
+    }
+  },
+  "controls": [
+    ["move", "Dig"],
+    ["fire", "Fire"],
+    ["pause", "Pause"],
+    ["sound", "Sound"],
+    ["fullscreen", "Full screen"]
+  ],
+  "versions": [
+    {
+      "key": "cga",
+      "label": "CGA",
+      "entry": "index.html",
+      "tag": "CGA · 320×200 · 4 colours",
+      "note": "The 1983 look: four colours, a new palette every level, PC-speaker beeps, shown at 4:3."
+    },
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "modern.html",
+      "tag": "HD · 16:9 · vector",
+      "note": "Widescreen remaster: lamplit tunnels, glowing gems, dust and squash, a chiptune band."
+    }
+  ]
+}
