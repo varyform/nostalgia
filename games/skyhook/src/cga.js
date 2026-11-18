@@ -4,9 +4,9 @@ import meta from '../game.json';
 import { createPilot } from './autopilot.js';
 // SKYHOOK — a CGA-style helicopter rescue shooter. 320x200, 4 colours, shown at 4:3.
 
-// The whole game on a canvas. `preview` is the launcher's attract mode: an autopilot flies
-// `mission`, with no input, sound, storage writes, window/document listeners or fit-to-window.
-export function boot(cv, { preview = false, reducedMotion = false, mission = 0 } = {}) {
+// The whole game on a canvas. `demo` is attract mode (?demo=on, the launcher's preview): an
+// autopilot flies `mission`, with no input, sound or storage writes. `onExit` returns to the launcher.
+export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sound = true, onExit = null } = {}) {
   const W = 320, H = 200, PH = 184, DT = 1 / 60, CAP = 4, SAFE_VY = 52, SAFE_VX = 40;
   const g = cv.getContext('2d');
   // everything bound outside the game's own state, undone by stop()
@@ -17,9 +17,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     cv.style.width = Math.floor(320 * s) + 'px';
     cv.style.height = Math.floor(240 * s) + 'px';
   }
-  // the preview draws the 320x200 buffer and lets the host scale it
-  if (preview) { cv.width = W; cv.height = H; cv.style.imageRendering = 'pixelated'; }
-  else { listen(window, 'resize', fit); fit(); }
+  listen(window, 'resize', fit); fit();
 
   // CGA palettes: 1 high, 0 high, 1 low
   const PALS = [
@@ -140,7 +138,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
   buildGfx();
 
   // ---------- sound (PC-speaker flavoured) ----------
-  let AC = null, master = null, soundOn = true, engine = null, noiseBuf = null;
+  let AC = null, master = null, soundOn = sound, engine = null, noiseBuf = null;
   function audioInit() {
     if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
     try {
@@ -209,8 +207,8 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     display: plain(meta.input.display),
     // stick counts from 0.4 deflection, as before; only arrows/space keep the page from scrolling
     threshold: 0.25, preventDefault: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'],
-    // the preview hears nothing and stays out of the launcher's <input-glyph> elements
-    ...(preview && { target: new EventTarget(), getGamepads: () => [], register: false }),
+    // the demo hears nothing and stays out of the launcher's <input-glyph> elements
+    ...(demo && { target: new EventTarget(), getGamepads: () => [], register: false }),
   });
   function toggleFullscreen() {
     const d = document, el = d.documentElement;
@@ -220,7 +218,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     const pr = req.call(el, { navigationUI: 'hide' });
     if (pr && pr.then) pr.then(() => { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); }).catch(() => {});
   }
-  if (!preview) {
+  if (!demo) {
     // fullscreen must be requested from the input event itself, not from the game loop
     input.on('fullscreen', toggleFullscreen);
     listen(window, 'keydown', audioInit);
@@ -231,7 +229,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
   }
   let I = {};
   function readInput(dt) {
-    if (preview) { I = state === 'play' && !paused ? pilot(dt) : {}; return; }
+    if (demo) { I = state === 'play' && !paused ? pilot(dt) : {}; return; }
     input.update();
     const h = a => input.held(a);
     I = { left: h('left'), right: h('right'), up: h('up'), down: h('down'), fire: h('fire'), bomb: h('bomb') };
@@ -422,17 +420,17 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
   let bullets = [], ebul = [], bombs = [], parts = [], rings = [], pops = [];
   let msgs = null, shake = 0, jetT = 0, clearT = 0, deadT = 0, unloadT = 0, lowFuelT = 0, stuckT = 0, tally = null;
   try { hiscore = +localStorage.getItem('skyhook-hi') || 0; } catch (e) {}
-  function saveHi() { if (!preview && score > hiscore) { hiscore = score; try { localStorage.setItem('skyhook-hi', hiscore); } catch (e) {} } }
+  function saveHi() { if (!demo && score > hiscore) { hiscore = score; try { localStorage.setItem('skyhook-hi', hiscore); } catch (e) {} } }
 
   const FL = x => { x = x | 0; return lv.fl[x < 0 ? 0 : x >= lv.L ? lv.L - 1 : x]; };
   const CE = x => { if (!lv.hasCeil) return -50; x = x | 0; return lv.ce[x < 0 ? 0 : x >= lv.L ? lv.L - 1 : x]; };
   function msg(lines, t = 2) {
-    if (preview) lines = lines.filter(l => !l.includes('{')); // the preview never asks for keys
+    if (demo) lines = lines.filter(l => !l.includes('{')); // the demo never asks for keys
     if (lines.length) msgs = { lines, t };
   }
   function pop(x, y, s) { pops.push({ x, y, s: String(s), t: 0.9 }); }
-  // ---------- attract mode (preview) ----------
-  const pilot = preview && createPilot({
+  // ---------- attract mode (demo) ----------
+  const pilot = demo && createPilot({
     W, FL, CE,
     get lv() { return lv; }, get p() { return p; }, get camX() { return camX; }, get fuel() { return fuel; }, get bombs() { return bombs; }, get ebul() { return ebul; },
   });
@@ -493,7 +491,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     addScore(tally.fuelB + tally.full);
     state = 'clear'; stT = 0; engineSet(false); sfx.fanfare(); msgs = null;
   }
-  function gameOver() { if (preview) return nextMission(); state = 'over'; stT = 0; saveHi(); sfx.over(); msgs = null; }
+  function gameOver() { if (demo) return nextMission(); state = 'over'; stT = 0; saveHi(); sfx.over(); msgs = null; }
 
   // ---------- effects ----------
   function explode(x, y, n, big) {
@@ -547,11 +545,11 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     if (hit('sound')) setSound(!soundOn);
     if (hit('palette')) { palIdx = (palIdx + 1) % PALS.length; buildGfx(); }
     T += dt; stT += dt;
-    if (state === 'title') { if (hit('start')) newGame(); return; }
+    if (state === 'title') { if (hit('start')) newGame(); else if (onExit && hit('quit')) onExit(); return; }
     if (state === 'over') { updateFx(dt); if (stT > 1 && hit('start')) state = 'title'; return; }
     if (state === 'clear') {
       updateFx(dt);
-      if (preview && stT > 3.5) return nextMission();
+      if (demo && stT > 3.5) return nextMission();
       if (stT > 1 && hit('start')) { mi++; if (mi >= MISSIONS.length) { state = 'win'; stT = 0; saveHi(); sfx.fanfare(); } else startMission(); }
       return;
     }
@@ -564,7 +562,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
       return;
     }
     if (msgs) { msgs.t -= dt; if (msgs.t <= 0) msgs = null; }
-    if (preview && watchdog(dt)) return;
+    if (demo && watchdog(dt)) return;
     if (shake > 0) shake -= dt;
     if (p.alive) updatePlayer(dt);
     else { deadT -= dt; if (deadT <= 0) { if (lives > 0) respawn(); else { gameOver(); return; } } }
@@ -1060,6 +1058,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     // keyboard-only extras (sound, palette, fullscreen) stay off the pad legend
     const rows = [[['fly', 'FLY'], ['fire', 'FIRE']], [['bomb', 'BOMB'], ['pause', 'PAUSE']]];
     if (!onPad()) rows.push([['sound', 'SOUND'], ['palette', 'PALETTE']], [['fullscreen', 'FULLSCREEN']]);
+    if (onExit) (rows[rows.length - 1].length < 2 ? rows[rows.length - 1] : rows[rows.push([]) - 1]).push(['quit', 'EXIT']);
     legend(rows, 121 + Math.round((4 - rows.length) * 6.5), 13, 3);
     if ((T * 2 | 0) % 2) cptext('PRESS {start} TO START', 172, 3);
     const hs = 'HI ' + pad6(hiscore), so = 'SOUND ' + (soundOn ? 'ON' : 'OFF'), sx = Math.round((W - tw(hs) - 18 - tw(so)) / 2);
@@ -1076,7 +1075,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     ];
     rows.forEach((r, i) => { if (stT > 0.3 + i * 0.3) { text(r[0], 70, 66 + i * 12, 1); rtext(r[1], 250, 66 + i * 12, r[2]); } });
     if (stT > 1.2) { text('SCORE', 70, 110, 3); rtext(pad6(score), 250, 110, 3); }
-    if (!preview && stT > 1 && (T * 2 | 0) % 2) cptext(mi + 1 >= MISSIONS.length ? 'PRESS {start}' : 'PRESS {start} FOR MISSION ' + (mi + 2), 134, 2);
+    if (!demo && stT > 1 && (T * 2 | 0) % 2) cptext(mi + 1 >= MISSIONS.length ? 'PRESS {start}' : 'PRESS {start} FOR MISSION ' + (mi + 2), 134, 2);
   }
 
   function drawWin() {
@@ -1122,12 +1121,12 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     render();
     if (!stopped) raf = requestAnimationFrame(frame);
   }
-  if (preview) {
+  if (demo) {
     mi = mission % MISSIONS.length; startMission();
-    // airborne by the first frame; a still preview shows the mission a few seconds in
+    // airborne by the first frame; a still demo shows the mission a few seconds in
     for (let i = 0, n = reducedMotion ? 420 : 75; i < n; i++) update(DT);
   }
-  if (preview && reducedMotion) render();
+  if (demo && reducedMotion) { render(); listen(window, 'resize', render); }
   else raf = requestAnimationFrame(frame);
 
   function stop() {

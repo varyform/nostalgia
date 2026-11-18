@@ -384,6 +384,30 @@
           height: 100%;
           object-fit: contain;
         }
+        /* a game's own page in demo mode, at viewport size, scaled into the box by JS */
+        .preview__frame {
+          position: absolute;
+          top: 0;
+          left: 0;
+          border: 0;
+          transform-origin: 0 0;
+          background: var(--black);
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.25s;
+        }
+        .preview__frame.is-ready {
+          opacity: 1;
+        }
+        /* launched: pinned to the viewport above everything, the prompt and scanlines included */
+        .preview__frame.is-playing {
+          position: fixed;
+          z-index: 110;
+          pointer-events: auto;
+        }
+        .preview__frame.is-zooming {
+          transition: transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+        }
         .preview::after {
           content: '';
           position: absolute;

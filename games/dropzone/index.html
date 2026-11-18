@@ -20,6 +20,8 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font:14px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;user-select:none;-webkit-user-select:none}
 #game{position:fixed;inset:0;display:block}
+/* demo mode (?demo=on): only the canvas, the autopilot plays */
+[data-demo] body>:not(#game){display:none!important}
 body.playing #game{cursor:none}
 .hidden{display:none!important}
 /* key / pad-button pictures (@nostalgia/input); height = font-size × 1.35, the old kbd footprint (≈19px) */
@@ -172,6 +174,7 @@ h1{font:850 clamp(56px,11vw,128px)/0.88 ui-sans-serif,system-ui,sans-serif;lette
       <div><input-glyph action="grenade" all></input-glyph> grenade · <input-glyph action="charge"></input-glyph> charge</div>
       <div><input-glyph action="medkit"></input-glyph> medkit · <input-glyph action="interact"></input-glyph> interact</div>
       <div><input-glyph action="map"></input-glyph> map · <input-glyph action="pause"></input-glyph> pause · <input-glyph action="mute"></input-glyph> mute</div>
+      <div id="exitHint" hidden><input-glyph action="back"></input-glyph> exit</div>
     </div>
   </div>
 </div>

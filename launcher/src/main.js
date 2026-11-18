@@ -1,4 +1,4 @@
-import { games, loadPreview, pageUrl } from '@nostalgia/game';
+import { games, pageUrl } from '@nostalgia/game';
 import { createInput } from '@nostalgia/input';
 
 // ---------- catalogue: every games/<id>/game.json, plus the empty drive ----------
@@ -159,7 +159,7 @@ function renderDetail() {
   if (g.empty) {
     $('#detail-title').textContent = 'A:\\';
     $('#preview-tag').textContent = 'NO SIGNAL';
-    void showPreview(g);
+    stage.show(g);
     info.innerHTML = `
       <div class="info__main">
         <h3 class="info__title">Drive A:</h3>
@@ -175,7 +175,7 @@ function renderDetail() {
   const v = version(g);
   $('#detail-title').textContent = `${dos(g.id)}\\${g.exe}`;
   $('#preview-tag').textContent = v.tag;
-  void showPreview(g, v);
+  stage.show(g, v);
   info.innerHTML = `
     <div class="info__main">
       <h3 class="info__title">${g.title}</h3>
@@ -304,13 +304,10 @@ async function run() {
     d.classList.add('is-shaking');
     return;
   }
+  if (!stage.ready) return; // its demo is still loading
   const v = version(g),
-    url = pageUrl(g, v),
     D = dos(g.id);
-  if (reduceMotion.matches) {
-    location.href = url;
-    return;
-  }
+  if (reduceMotion.matches) return stage.play(g);
   term.show('launch');
   await term.type('C:\\NOSTALGIA> ', `cd ${D.toLowerCase()}`);
   await term.type(
@@ -320,7 +317,8 @@ async function run() {
   seek();
   term.line(`Loading ${g.title}${g.versions.length > 1 ? ` (${v.label})` : ''}...`);
   await term.wait(520);
-  location.href = url;
+  await stage.play(g);
+  term.close();
 }
 
 async function quit() {
@@ -338,22 +336,147 @@ addEventListener('pageshow', e => {
 });
 
 // ---------- previews ----------
-// Each game runs its own render loop in attract mode on a fresh canvas.
+// The selected game runs its own demo (?demo=on) in an iframe laid out at the full viewport
+// size and scaled down into the preview box. Launching zooms it to full size and tells the
+// page to play; the game posts `exit` from its title screen (see packages/game/src/host.ts).
 const previewBox = $('.preview');
-let running = null,
-  ticket = 0;
-async function showPreview(g, v) {
-  const mine = ++ticket;
-  running?.stop();
-  running = null;
-  previewBox.querySelector('canvas')?.remove();
-  const cv = document.createElement('canvas');
-  cv.setAttribute('aria-hidden', 'true');
-  previewBox.prepend(cv);
-  const factory = (!g.empty && (await loadPreview(g.id))) || noDisk;
-  if (mine !== ticket) return; // the player moved on while it loaded
-  running = factory(cv, { version: v?.key, reducedMotion: reduceMotion.matches });
-}
+const stage = {
+  frame: null, // the demo on show
+  pending: null, // the next one, until it has loaded
+  snow: null, // the empty drive
+  playing: null, // the game being played
+  get ready() {
+    return !!this.frame && !this.pending;
+  },
+  show(g, v, reload = false) {
+    if (this.playing) return;
+    const src = g.empty ? '' : pageUrl(g, v, { demo: true });
+    if (!reload && !g.empty && (this.pending ?? this.frame)?.dataset.src === src) return;
+    this.pending?.remove();
+    this.pending = null;
+    if (g.empty) {
+      this.clear();
+      const cv = document.createElement('canvas');
+      cv.setAttribute('aria-hidden', 'true');
+      previewBox.prepend(cv);
+      this.snow = { el: cv, run: noDisk(cv, { reducedMotion: reduceMotion.matches }) };
+      return;
+    }
+    const f = document.createElement('iframe');
+    f.className = 'preview__frame';
+    f.title = `${g.title} demo`;
+    f.tabIndex = -1;
+    // `*`: opened from disk the frame's origin is opaque and would not match the default (src)
+    f.allow = 'gamepad *; fullscreen *; autoplay *';
+    f.setAttribute('aria-hidden', 'true');
+    f.src = f.dataset.src = src;
+    // the previous demo keeps playing until this one is up
+    f.addEventListener(
+      'load',
+      () => {
+        if (this.pending !== f) return;
+        this.pending = null;
+        this.clear();
+        this.frame = f;
+        f.classList.add('is-ready');
+      },
+      { once: true },
+    );
+    this.pending = f;
+    previewBox.prepend(f);
+    this.fit(f);
+  },
+  clear() {
+    this.frame?.remove();
+    this.frame = null;
+    this.snow?.run.stop();
+    this.snow?.el.remove();
+    this.snow = null;
+  },
+  // where the frame sits in the box: the viewport, scaled to fit and centred
+  boxTransform() {
+    const r = previewBox.getBoundingClientRect(),
+      b = previewBox.clientLeft,
+      w = previewBox.clientWidth,
+      h = previewBox.clientHeight,
+      k = Math.min(w / innerWidth, h / innerHeight);
+    return { k, x: (w - innerWidth * k) / 2, y: (h - innerHeight * k) / 2, left: r.left + b, top: r.top + b };
+  },
+  fit(f) {
+    const { k, x, y } = this.boxTransform();
+    f.style.width = innerWidth + 'px';
+    f.style.height = innerHeight + 'px';
+    f.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
+  },
+  fitAll() {
+    for (const f of [this.frame, this.pending]) if (f && f !== this.playing) this.fit(f);
+  },
+  // FLIP: pin the frame where it is on screen, then let it grow to the viewport
+  async play(g) {
+    const f = this.frame;
+    if (!f || this.playing) return;
+    this.playing = f;
+    const { k, x, y, left, top } = this.boxTransform();
+    f.style.transform = `translate(${left + x}px, ${top + y}px) scale(${k})`;
+    f.classList.add('is-playing');
+    if (!reduceMotion.matches) {
+      void f.offsetWidth;
+      f.classList.add('is-zooming');
+      f.style.transform = 'none';
+      await transitionEnd(f);
+    } else f.style.transform = 'none';
+    f.classList.remove('is-zooming');
+    f.removeAttribute('aria-hidden');
+    f.tabIndex = 0;
+    document.title = `${g.title} · Nostalgia`;
+    history.pushState({ playing: g.id }, '');
+    f.contentWindow?.postMessage({ nostalgia: 'play', sound: prefs.sound }, '*');
+    f.focus();
+  },
+  // back to the box, then a fresh demo in place of the played game
+  async exit() {
+    const f = this.playing;
+    if (!f) return;
+    const { k, x, y, left, top } = this.boxTransform();
+    f.blur();
+    if (!reduceMotion.matches) {
+      f.classList.add('is-zooming');
+      f.style.transform = `translate(${left + x}px, ${top + y}px) scale(${k})`;
+      await transitionEnd(f);
+    }
+    document.title = title;
+    this.playing = null;
+    f.classList.remove('is-playing', 'is-zooming');
+    f.tabIndex = -1;
+    f.setAttribute('aria-hidden', 'true');
+    this.fit(f);
+    list.focus();
+    const g = GAMES[index];
+    if (!g.empty) this.show(g, version(g), true);
+  },
+};
+const title = document.title;
+// the zoom's end, or its duration when the event never comes (hidden tab, no transition)
+const transitionEnd = el =>
+  new Promise(done => {
+    const end = e => {
+      if (e && (e.target !== el || e.propertyName !== 'transform')) return;
+      el.removeEventListener('transitionend', end);
+      clearTimeout(timer);
+      done();
+    };
+    const timer = setTimeout(end, 700);
+    el.addEventListener('transitionend', end);
+  });
+new ResizeObserver(() => stage.fitAll()).observe(previewBox);
+addEventListener('resize', () => stage.fitAll());
+// the game leaves from its title screen; Back leaves from anywhere
+addEventListener('message', e => {
+  if (!stage.playing || e.source !== stage.playing.contentWindow || e.data?.nostalgia !== 'exit') return;
+  if (history.state?.playing) history.back();
+  else void stage.exit();
+});
+addEventListener('popstate', () => void stage.exit());
 reduceMotion.addEventListener('change', () => renderDetail());
 
 // the empty drive: snow on a 320×200 monitor
@@ -457,6 +580,7 @@ function go(d) {
 }
 
 addEventListener('keydown', e => {
+  if (stage.playing) return;
   if (term.open) {
     e.preventDefault();
     term.key();
@@ -553,6 +677,7 @@ const PAD = {
   East: quit,
 };
 input.onPad(k => {
+  if (stage.playing) return;
   if (term.open) return term.key();
   if (help.open) return k === 'South' || k === 'East' || k === 'Select' ? help.close() : undefined;
   PAD[k]?.();

@@ -109,7 +109,13 @@ export function createInput(opts: InputOptions): Input {
     mouseTarget = opts.mouseTarget ?? target;
   const getPads =
     opts.getGamepads ??
-    (() => (typeof navigator !== 'undefined' && navigator.getGamepads ? [...navigator.getGamepads()] : []));
+    (() => {
+      try {
+        return typeof navigator !== 'undefined' && navigator.getGamepads ? [...navigator.getGamepads()] : [];
+      } catch {
+        return []; // blocked by permissions policy (an iframe without allow="gamepad")
+      }
+    });
   const names = Object.keys(actions);
 
   const bound = new Set(names.flatMap(n => actions[n].keys ?? []));

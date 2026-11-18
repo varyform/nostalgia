@@ -1,8 +1,8 @@
 // The contract every game folder fulfils:
 //
 //   games/<id>/game.json      GameMeta: what the launcher shows and the build compiles
-//   games/<id>/<entry>.html   one page per version (+ its sources)
-//   games/<id>/src/preview.js default export: Preview, the game's own render loop in attract mode
+//   games/<id>/<entry>.html   one page per version (+ its sources); started through host()
+//                             (host.ts), it runs a demo with ?demo=on, the launcher's preview
 //
 // Each version compiles to exactly one self-contained file: dist/<id>.html, or
 // dist/<id>-<version>.html when a game has several versions.
@@ -41,25 +41,6 @@ export interface GameMeta {
   controls: [string, string][];
   versions: GameVersion[];
 }
-
-export interface PreviewOptions {
-  /** GameVersion.key to show. */
-  version: string;
-  /** Draw a still frame instead of animating. */
-  reducedMotion: boolean;
-}
-
-export interface PreviewHandle {
-  /** Stop the loop and release everything (rAF, observers, listeners). */
-  stop(): void;
-}
-
-/**
- * Run the game's attract mode on a canvas the host owns: no input, no sound,
- * no document-level side effects. Size the drawing buffer from the canvas's
- * CSS box; the host may resize it at any time.
- */
-export type Preview = (canvas: HTMLCanvasElement, options: PreviewOptions) => PreviewHandle;
 
 /** Compiled file name of a version, relative to dist/. */
 export function pageFile(meta: Pick<GameMeta, 'id' | 'versions'>, version: GameVersion): string {

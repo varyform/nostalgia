@@ -4,9 +4,9 @@ import meta from '../game.json';
 import { createPilot } from './autopilot.js';
 // SKYHOOK HD — widescreen remaster. World runs in 384x216 units (16:9), drawn as vectors at native resolution.
 
-// The whole game on a canvas. `preview` is the launcher's attract mode: an autopilot flies
-// `mission`, with no input, sound, storage writes, window/document listeners or fit-to-window.
-export function boot(cv, { preview = false, reducedMotion = false, mission = 0 } = {}) {
+// The whole game on a canvas. `demo` is attract mode (?demo=on, the launcher's preview): an
+// autopilot flies `mission`, with no input, sound or storage writes. `onExit` returns to the launcher.
+export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sound = true, onExit = null } = {}) {
   const W = 384, H = 216, PH = 216, DT = 1 / 60, CAP = 4, SAFE_VY = 52, SAFE_VX = 40;
   const g = cv.getContext('2d');
   // everything bound outside the game's own state, undone by stop()
@@ -15,15 +15,12 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
   const F = "'Rajdhani','Segoe UI',system-ui,sans-serif";
   let cw = 0, ch = 0, S = 1, u = 1, vign = null;
   const lc = document.createElement('canvas'), lg = lc.getContext('2d');
-  // standalone: the largest 16:9 box in the window; preview: in the canvas's CSS box, which the host
-  // letterboxes (object-fit), so only the drawing buffer is sized
-  let boxW = -1, boxH = -1, boxDpr = 0;
+  // the largest 16:9 box in the window
   function fit() {
-    boxW = cv.clientWidth; boxH = cv.clientHeight; boxDpr = devicePixelRatio;
-    let w = preview ? boxW || 640 : innerWidth, h = preview ? boxH || 360 : innerHeight;
+    let w = innerWidth, h = innerHeight;
     if (w / h > 16 / 9) w = h * 16 / 9; else h = w * 9 / 16;
     const dpr = Math.min(devicePixelRatio || 1, 2, 2560 / w);
-    if (!preview) { cv.style.width = Math.round(w) + 'px'; cv.style.height = Math.round(h) + 'px'; }
+    cv.style.width = Math.round(w) + 'px'; cv.style.height = Math.round(h) + 'px';
     cw = cv.width = Math.round(w * dpr); ch = cv.height = Math.round(h * dpr);
     lc.width = Math.ceil(cw / 2); lc.height = Math.ceil(ch / 2);
     S = ch / H; u = ch / 1080;
@@ -32,9 +29,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,0.55)');
     v.fillStyle = gr; v.fillRect(0, 0, cw, ch);
   }
-  // the host may resize the preview box at any time
-  const refit = () => { if (cv.clientWidth !== boxW || cv.clientHeight !== boxH || devicePixelRatio !== boxDpr) fit(); };
-  if (!preview) listen(window, 'resize', fit);
+  listen(window, 'resize', fit);
   fit();
 
   // soft sprites
@@ -75,7 +70,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
   const pad6 = n => String(Math.max(0, n | 0)).padStart(6, '0');
 
   // ---------- sound ----------
-  let AC = null, master = null, bus = null, soundOn = true, engine = null, noiseBuf = null;
+  let AC = null, master = null, bus = null, soundOn = sound, engine = null, noiseBuf = null;
   function audioInit() {
     if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
     try {
@@ -146,8 +141,8 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     ...meta.input,
     // stick counts from 0.4 deflection, as before; only arrows/space keep the page from scrolling
     threshold: 0.25, preventDefault: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'],
-    // the preview hears nothing and stays out of the launcher's <input-glyph> elements
-    ...(preview && { target: new EventTarget(), getGamepads: () => [], register: false }),
+    // the demo hears nothing and stays out of the launcher's <input-glyph> elements
+    ...(demo && { target: new EventTarget(), getGamepads: () => [], register: false }),
   });
   function toggleFullscreen() {
     const d = document, el = d.documentElement;
@@ -157,7 +152,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     const pr = req.call(el, { navigationUI: 'hide' });
     if (pr && pr.then) pr.then(() => { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); }).catch(() => {});
   }
-  if (!preview) {
+  if (!demo) {
     // fullscreen must be requested from the input event itself, not from the game loop
     input.on('fullscreen', toggleFullscreen);
     listen(window, 'keydown', audioInit);
@@ -168,7 +163,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
   }
   let I = {};
   function readInput(dt) {
-    if (preview) { I = state === 'play' && !paused ? pilot(dt) : {}; return; }
+    if (demo) { I = state === 'play' && !paused ? pilot(dt) : {}; return; }
     input.update();
     const h = a => input.held(a);
     I = { left: h('left'), right: h('right'), up: h('up'), down: h('down'), fire: h('fire'), bomb: h('bomb') };
@@ -208,7 +203,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
       else if (paused) taps.add('pause');
     }
   }
-  if (!preview) {
+  if (!demo) {
     ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(n => listen(cv, n, onTouch, { passive: false }));
     listen(cv, 'mousedown', () => { audioInit(); if (state !== 'play') taps.add('start'); });
   }
@@ -387,17 +382,17 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
   let bullets = [], ebul = [], bombs = [], parts = [], rings = [], pops = [];
   let msgs = null, shake = 0, jetT = 0, clearT = 0, deadT = 0, unloadT = 0, lowFuelT = 0, stuckT = 0, tally = null;
   try { hiscore = +localStorage.getItem('skyhook-hd-hi') || 0; } catch (e) {}
-  function saveHi() { if (!preview && score > hiscore) { hiscore = score; try { localStorage.setItem('skyhook-hd-hi', hiscore); } catch (e) {} } }
+  function saveHi() { if (!demo && score > hiscore) { hiscore = score; try { localStorage.setItem('skyhook-hd-hi', hiscore); } catch (e) {} } }
 
   const FL = x => { x = x | 0; return lv.fl[x < 0 ? 0 : x >= lv.L ? lv.L - 1 : x]; };
   const CE = x => { if (!lv.hasCeil) return -50; x = x | 0; return lv.ce[x < 0 ? 0 : x >= lv.L ? lv.L - 1 : x]; };
   function msg(lines, t = 2) {
-    if (preview) lines = lines.filter(l => !l.includes('{')); // the preview never asks for keys
+    if (demo) lines = lines.filter(l => !l.includes('{')); // the demo never asks for keys
     if (lines.length) msgs = { lines, t };
   }
   function pop(x, y, s) { pops.push({ x, y, s: String(s), t: 0.9 }); }
-  // ---------- attract mode (preview) ----------
-  const pilot = preview && createPilot({
+  // ---------- attract mode (demo) ----------
+  const pilot = demo && createPilot({
     W, FL, CE,
     get lv() { return lv; }, get p() { return p; }, get camX() { return camX; }, get fuel() { return fuel; }, get bombs() { return bombs; }, get ebul() { return ebul; },
   });
@@ -458,7 +453,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     addScore(tally.fuelB + tally.full);
     state = 'clear'; stT = 0; engineSet(false); sfx.fanfare(); msgs = null;
   }
-  function gameOver() { if (preview) return nextMission(); state = 'over'; stT = 0; saveHi(); sfx.over(); msgs = null; }
+  function gameOver() { if (demo) return nextMission(); state = 'over'; stT = 0; saveHi(); sfx.over(); msgs = null; }
 
   // ---------- effects ----------
   let flashes = [], blooms = [];
@@ -608,11 +603,11 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     readInput(dt); applyTouch();
     if (hit('sound')) setSound(!soundOn);
     T += dt; stT += dt;
-    if (state === 'title') { camX += 26 * dt; if (camX > lv.L - W - 10) camX = 0; updateFx(dt); if (hit('start')) newGame(); return; }
+    if (state === 'title') { camX += 26 * dt; if (camX > lv.L - W - 10) camX = 0; updateFx(dt); if (hit('start')) newGame(); else if (onExit && hit('quit')) onExit(); return; }
     if (state === 'over') { updateFx(dt); if (stT > 1 && hit('start')) toTitle(); return; }
     if (state === 'clear') {
       updateFx(dt);
-      if (preview && stT > 3.5) return nextMission();
+      if (demo && stT > 3.5) return nextMission();
       if (stT > 1 && hit('start')) { mi++; if (mi >= MISSIONS.length) { state = 'win'; stT = 0; saveHi(); sfx.fanfare(); } else startMission(); }
       return;
     }
@@ -625,7 +620,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
       return;
     }
     if (msgs) { msgs.t -= dt; if (msgs.t <= 0) msgs = null; }
-    if (preview && watchdog(dt)) return;
+    if (demo && watchdog(dt)) return;
     if (shake > 0) shake -= dt;
     if (p.alive) updatePlayer(dt);
     else { deadT -= dt; if (deadT <= 0) { if (lives > 0) respawn(); else { gameOver(); return; } } }
@@ -1634,6 +1629,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     // keyboard-only extras (sound, fullscreen) stay off the pad legend
     const C = [['fly', 'FLY'], ['fire', 'FIRE'], ['bomb', 'BOMB'], ['pause', 'PAUSE']];
     if (!onPad()) C.push(['sound', 'SOUND'], ['fullscreen', 'FULLSCREEN']);
+    if (onExit) C.push(['quit', 'EXIT']);
     C.forEach(([k, v], i) => {
       prompt('{' + k + '}', x + 640 * u, 440 * u + i * 38 * u, 22, '#7ff6ff', 700, 'right', 2);
       label(v, x + 670 * u, 440 * u + i * 38 * u, 22, 'rgba(255,255,255,0.8)', 600, 'left', 2);
@@ -1648,7 +1644,7 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     const rows = [['AGENTS SAVED', tally.saved + ' / ' + tally.total], ['FUEL BONUS', '+' + tally.fuelB], ['FULL RESCUE', tally.full ? '+' + tally.full : '—']];
     rows.forEach((r, i) => { if (stT > 0.3 + i * 0.3) { label(r[0], x + 80 * u, 460 * u + i * 50 * u, 28, 'rgba(255,255,255,0.7)', 600, 'left', 3); label(r[1], x + 680 * u, 460 * u + i * 50 * u, 28, '#ffd98a', 700, 'right', 2); } });
     if (stT > 1.2) { label('SCORE', x + 80 * u, 640 * u, 32, '#fff', 700, 'left', 3); label(pad6(score), x + 680 * u, 640 * u, 32, '#fff', 700, 'right', 2); }
-    if (!preview && stT > 1 && (T * 2 | 0) % 2) prompt((tapUI() ? 'TAP' : 'PRESS {start}') + (mi + 1 >= MISSIONS.length ? '' : ' FOR MISSION ' + (mi + 2)), cx, 690 * u, 22, '#7ff6ff', 700, 'center', 4);
+    if (!demo && stT > 1 && (T * 2 | 0) % 2) prompt((tapUI() ? 'TAP' : 'PRESS {start}') + (mi + 1 >= MISSIONS.length ? '' : ' FOR MISSION ' + (mi + 2)), cx, 690 * u, 22, '#7ff6ff', 700, 'center', 4);
   }
   function render() {
     if (state === 'title') return drawTitle();
@@ -1679,27 +1675,20 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
   }
 
   // ---------- main loop ----------
-  let last = performance.now(), acc = 0, raf = 0, stopped = false, ro = null;
+  let last = performance.now(), acc = 0, raf = 0, stopped = false;
   function frame(now) {
-    if (preview) refit();
     acc += Math.min(0.1, (now - last) / 1000); last = now;
     while (acc >= DT) { update(DT); acc -= DT; taps.clear(); }
     render();
     if (!stopped) raf = requestAnimationFrame(frame);
   }
-  if (preview) {
+  if (demo) {
     mi = mission % MISSIONS.length; startMission();
-    // airborne by the first frame; a still preview shows the mission a few seconds in
+    // airborne by the first frame; a still demo shows the mission a few seconds in
     for (let i = 0, n = reducedMotion ? 420 : 75; i < n; i++) update(DT);
   } else toTitle();
-  if (preview && reducedMotion) {
-    render();
-    // still frame: redraw it when the box changes size
-    if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(() => { const w0 = cw, h0 = ch; refit(); if (cw !== w0 || ch !== h0) render(); });
-      ro.observe(cv);
-    }
-  } else raf = requestAnimationFrame(frame);
+  if (demo && reducedMotion) { render(); listen(window, 'resize', render); }
+  else raf = requestAnimationFrame(frame);
 
   function stop() {
     if (stopped) return;
@@ -1707,7 +1696,6 @@ export function boot(cv, { preview = false, reducedMotion = false, mission = 0 }
     cancelAnimationFrame(raf);
     offs.forEach(off => off());
     input.destroy();
-    ro?.disconnect();
     if (AC) { AC.close().catch(() => {}); AC = null; engine = null; }
   }
   return { stop };

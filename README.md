@@ -26,6 +26,9 @@ Open `dist/index.html` in a desktop or mobile browser (or any game's file direct
 | `F3` / `C`     | Scanlines on/off        |
 | `F10` / `Q`    | Exit to DOS             |
 
+Run zooms the game out of its preview. To come back, leave from the game's title screen (Skyhook: `Q` / Select,
+Dropzone: `Esc` / B) or press the browser's Back button.
+
 Mouse and touch work too: click a game to select it, double-click or press **Run** to start it. With a gamepad: d-pad
 selects, A / ✕ runs, and the key hints turn into the pad's buttons.
 
@@ -85,17 +88,19 @@ glyph.
 
 A game is a folder in `games/`; the build and the launcher find it by its `game.json`. Nothing else lists it.
 
-| File             | What                                                                                                                 |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `game.json`      | Title, executable, original + year, genre, tags, blurb, facts, input bindings, controls the launcher lists, versions |
-| `<entry>.html`   | One page per version (`versions[].entry`)                                                                            |
-| `src/preview.js` | `export default (canvas, { version, reducedMotion }) => ({ stop })`: the game's own loop in attract mode             |
+| File           | What                                                                                                                 |
+| -------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `game.json`    | Title, executable, original + year, genre, tags, blurb, facts, input bindings, controls the launcher lists, versions |
+| `<entry>.html` | One page per version (`versions[].entry`), started through `host()` from `@nostalgia/game/host`                      |
 
 - The game builds its `createInput` from `game.json`'s `input`, so the launcher shows exactly the keys and buttons it
   plays with. `controls` lists `[action, label]` pairs from it.
-- The preview runs the real game on a canvas the launcher owns: autopilot, no input listeners (`createInput({ …,
-  register: false })`), no sound, no storage, no DOM outside the canvas. `stop()` releases everything.
+- Every page has a demo mode, `?demo=on`: an autopilot plays, input is ignored, nothing is saved. `?sound=off` mutes
+  it. `host({ demo, play })` starts whichever the URL asks for.
+- The launcher previews the selected game as `<iframe src="<page>?demo=on&sound=off">`, scaled down into its preview
+  box. Run zooms the frame to full size and posts `play`; the page drops the demo and boots the game in place. Leaving
+  from the game's title screen posts `exit`, and the launcher zooms back out (the browser's Back button does too).
 - Each version compiles to one file: `dist/<game>.html`, or `dist/<game>-<version>.html` when there are several.
   `mise run build <game>-<version>` builds one.
 
-Types: `packages/game/src/meta.ts`.
+Types and protocol: `packages/game/src/meta.ts`, `packages/game/src/host.ts`.

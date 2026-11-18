@@ -1,8 +1,8 @@
 'use strict';
-// The whole game behind one factory. boot(canvas) is the standalone page (main.js);
-// boot(canvas, { preview: true, pilot }) runs the same simulation and renderer as the
-// launcher's attract mode (preview.js): no DOM besides the canvas, no listeners, no
-// audio, no storage, and the autopilot (autopilot.js) at the controls.
+// The whole game behind one factory, started by the page (main.js). boot(canvas) is the game;
+// boot(canvas, { demo: true, pilot }) is attract mode (?demo=on, the launcher's preview): the
+// same simulation and renderer with no DOM besides the canvas, no listeners, no audio, no
+// storage, and the autopilot (autopilot.js) at the controls. onExit returns to the launcher.
 import { createInput, menuNav, glyphHTML } from '@nostalgia/input';
 import meta from '../game.json';
 /* =====================================================================
@@ -497,10 +497,10 @@ function getChunk(w,cx,cy,frame){
 /* =====================================================================
    game state
    ===================================================================== */
-export function boot(canvas,{preview=false,reducedMotion=false,op=0,pilot:makePilot=null}={}){
+export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot=null,sound=true,onExit=null}={}){
   // dom: the standalone page, with its screens, HUD, listeners, sound and saved scores
-  const dom=!preview,offs=[],listen=(t,type,fn)=>{t.addEventListener(type,fn);offs.push(()=>t.removeEventListener(type,fn));};
-  const audio=makeAudio();if(!dom)audio.unlock=()=>{};
+  const dom=!demo,offs=[],listen=(t,type,fn)=>{t.addEventListener(type,fn);offs.push(()=>t.removeEventListener(type,fn));};
+  const audio=makeAudio();audio.muted=!sound;if(!dom)audio.unlock=()=>{};
   const cv=canvas,ctx=cv.getContext('2d'),darkCv=mkCanvas(2,2),darkCtx=darkCv.getContext('2d');
   const miniCv=dom?$('mini'):null,miniCtx=miniCv&&miniCv.getContext('2d');
   let CW=0,CH=0,DPR=1,VIGNETTE=null;
@@ -512,19 +512,17 @@ export function boot(canvas,{preview=false,reducedMotion=false,op=0,pilot:makePi
   function baseZoom(){return clamp(Math.min(CW/1350,CH/820),0.5,1.6);}
   function resize(){
     DPR=Math.min(2,window.devicePixelRatio||1);
-    if(dom){CW=innerWidth;CH=innerHeight;}else{CW=cv.clientWidth||640;CH=cv.clientHeight||400;}   // preview: the host's CSS box
-    cv.width=Math.round(CW*DPR);cv.height=Math.round(CH*DPR);if(dom){cv.style.width=CW+'px';cv.style.height=CH+'px';}
+    CW=innerWidth;CH=innerHeight;
+    cv.width=Math.round(CW*DPR);cv.height=Math.round(CH*DPR);cv.style.width=CW+'px';cv.style.height=CH+'px';
     darkCv.width=Math.max(2,Math.round(CW/2));darkCv.height=Math.max(2,Math.round(CH/2));
     VIGNETTE=mkCanvas(Math.max(2,Math.round(CW/2)),Math.max(2,Math.round(CH/2)));const v=VIGNETTE.getContext('2d'),gr=v.createRadialGradient(VIGNETTE.width/2,VIGNETTE.height/2,Math.min(VIGNETTE.width,VIGNETTE.height)*0.35,VIGNETTE.width/2,VIGNETTE.height/2,Math.hypot(VIGNETTE.width,VIGNETTE.height)*0.6);
     gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,'rgba(0,0,0,0.6)');v.fillStyle=gr;v.fillRect(0,0,VIGNETTE.width,VIGNETTE.height);
   }
-  if(dom)listen(window,'resize',resize);resize();
-  // preview: the host may resize the box (or the page zoom) at any time
-  function fit(){const w=cv.clientWidth,h=cv.clientHeight;if(w&&h&&(w!==CW||h!==CH||Math.min(2,window.devicePixelRatio||1)!==DPR))resize();}
+  listen(window,'resize',resize);resize();
 
   /* ---------- input ---------- */
   // bindings come from game.json: keyboard+mouse are the original ones, pad bindings are positional (South = A / ✕).
-  // The preview's input hears nothing but the autopilot's virtual pad, on a private target, and stays unregistered
+  // The demo's input hears nothing but the autopilot's virtual pad, on a private target, and stays unregistered
   // so the host's <input-glyph> elements keep following the host's own input.
   const pilot=!dom&&makePilot?makePilot({G,restart:()=>startPreview(++op)}):null;
   const input=dom?createInput({...meta.input,mouseTarget:cv,preventDefault:['Space','Tab','ArrowUp','ArrowDown','ArrowLeft','ArrowRight']})
@@ -545,8 +543,9 @@ export function boot(canvas,{preview=false,reducedMotion=false,op=0,pilot:makePi
     input.on('mute',()=>{audio.setMuted(!audio.muted);toast(audio.muted?'Sound off':'Sound on');});
     // pad Start outside play goes forward: the focused operation card or the screen's primary button (Start, Start deploys)
     input.on('pause',()=>{if(inPlay())setPaused(!G.paused);else if(padAim()){const f=menuFocus(),el=f&&f.classList.contains('mcard')?f:menuDefault();if(el)el.click();}});
-    input.on('back',()=>{if(G.state==='brief')toTitle();});
-    nav=menuNav(input,{root:menuRoot,enabled:()=>!inPlay()||G.paused,onBack:()=>{if(G.state==='brief')toTitle();else if(G.paused)setPaused(false);}});
+    input.on('back',()=>{if(G.state==='brief')toTitle();else if(G.state==='title'&&onExit)onExit();});
+    nav=menuNav(input,{root:menuRoot,enabled:()=>!inPlay()||G.paused,onBack:()=>{if(G.state==='brief')toTitle();else if(G.paused)setPaused(false);else if(G.state==='title'&&onExit)onExit();}});
+    $('exitHint').hidden=!onExit;
   }
   const padFocus=el=>{if(nav)nav.focus(el);};
   // a pad press that leaves a menu for play (South on Deploy / Resume) must not also act in the game:
@@ -620,7 +619,7 @@ export function boot(canvas,{preview=false,reducedMotion=false,op=0,pilot:makePi
   }
   function finish(win,reason){
     if(G.state==='end')return;
-    if(!dom){G.state='end';audio.stopLoops();return;}   // preview: no scores, the autopilot fades to the next run
+    if(!dom){G.state='end';audio.stopLoops();return;}   // demo: no scores, the autopilot fades to the next run
     const w=G.world,M=w.M,p=G.player;
     G.state='end';G.paused=false;audio.stopLoops();playing(false);$('hud').classList.add('hidden');
     const objs=w.targets.filter(t=>t.done).length,tot=w.targets.length,acc=G.stats.shots?Math.round(G.stats.hits/G.stats.shots*100):0;
@@ -1195,14 +1194,14 @@ export function boot(canvas,{preview=false,reducedMotion=false,op=0,pilot:makePi
     if(G.heli&&w.T.dark)L.push({x:G.heli.x+Math.cos(G.heli.ang)*70,y:G.heli.y+Math.sin(G.heli.ang)*70,r:200,i:0.8,c:'220,235,255',g:0.06});
     return L;
   }
-  // the preview paints only a few new terrain chunks per frame (a cold flight view needs ~30 at ~10 ms each);
+  // the demo paints only a few new terrain chunks per frame (a cold flight view needs ~30 at ~10 ms each);
   // the rest show flat ground until their turn. The standalone page and stills paint all of them at once.
   const budgeted=!dom&&!reducedMotion,warmCtx=budgeted&&mkCanvas(1,1).getContext('2d');let chunkBudget=Infinity;
   function chunkAt(w,cx,cy){
     if(chunkBudget<=0&&!w.chunks.has((cy+100)*1000+(cx+100)))return null;
     if(w.chunks.has((cy+100)*1000+(cx+100)))return getChunk(w,cx,cy,G.frame);
     // a new chunk: pay its first scaled draw now, into a scrap canvas, rather than in the frame where
-    // a whole row of them scrolls into view (that frame cost ~90 ms in a software-rendered preview)
+    // a whole row of them scrolls into view (that frame cost ~90 ms in a software-rendered demo)
     chunkBudget--;const c=getChunk(w,cx,cy,G.frame);if(budgeted){const k=G.cam.zoom*DPR;warmCtx.drawImage(c,0,0,CHUNK*k,CHUNK*k);}return c;
   }
   function render(){
@@ -1218,7 +1217,7 @@ export function boot(canvas,{preview=false,reducedMotion=false,op=0,pilot:makePi
     const cx0=Math.floor(v.vx0/CHUNK),cx1=Math.floor(v.vx1/CHUNK),cy0=Math.floor(v.vy0/CHUNK),cy1=Math.floor(v.vy1/CHUNK);
     if(budgeted){chunkBudget=pilot&&pilot.fade>0.3?3:1;g.fillStyle=rgb(mix3(T.grassA,T.grassB,0.4));}
     for(let cy=cy0;cy<=cy1;cy++)for(let cx=cx0;cx<=cx1;cx++){const c=chunkAt(w,cx,cy);if(c)g.drawImage(c,cx*CHUNK,cy*CHUNK,CHUNK+1,CHUNK+1);else g.fillRect(cx*CHUNK,cy*CHUNK,CHUNK+1,CHUNK+1);}
-    // preview: spare budget paints the ring just outside the view, before the camera gets there
+    // demo: spare budget paints the ring just outside the view, before the camera gets there
     if(budgeted)for(let cy=cy0-1;cy<=cy1+1&&chunkBudget>0;cy++)for(let cx=cx0-1;cx<=cx1+1;cx++)if(cy<cy0||cy>cy1||cx<cx0||cx>cx1)chunkAt(w,cx,cy);
     // river shimmer
     if(Math.abs(camY-w.riverBase)<v.vy1-v.vy0){g.strokeStyle='rgba(220,240,255,0.10)';g.lineWidth=1.4;g.beginPath();
@@ -1468,12 +1467,12 @@ export function boot(canvas,{preview=false,reducedMotion=false,op=0,pilot:makePi
      loop
      ===================================================================== */
   function tick(dt){
-    if(pilot){fit();pilot.step(dt);}   // the autopilot sets its pad before the input reads it
+    if(pilot)pilot.step(dt);   // the autopilot sets its pad before the input reads it
     const live=inPlay()&&!G.paused;input.update();
     if(!live&&inPlay()&&!G.paused)inputLock=true;if(inputLock&&!PLAY_ACTS.some(a=>input.held(a)))inputLock=false;
     update(dt);render();
   }
-  let last=performance.now(),raf=0,stopped=false,ro=null;
+  let last=performance.now(),raf=0,stopped=false;
   function frame(now){if(stopped)return;const dt=Math.min(0.05,(now-last)/1000);last=now;try{tick(dt);}catch(e){console.error(e);}raf=requestAnimationFrame(frame);}
 
   /* ---------- attract mode ---------- */
@@ -1498,14 +1497,14 @@ export function boot(canvas,{preview=false,reducedMotion=false,op=0,pilot:makePi
     startPreview(op,true);
     for(let i=0;i<150;i++){G.player.stance='crouch';update(1/60);}
     render();
-    if(typeof ResizeObserver!=='undefined'){ro=new ResizeObserver(()=>{if(stopped)return;fit();render();});ro.observe(cv);}
+    listen(window,'resize',render);
   }else{
     startPreview(op);
     raf=requestAnimationFrame(frame);
   }
   return{stop(){
     if(stopped)return;stopped=true;
-    cancelAnimationFrame(raf);if(ro)ro.disconnect();
+    cancelAnimationFrame(raf);
     for(const off of offs)off();offs.length=0;
     if(nav)nav.destroy();input.destroy();audio.close();
     // drop the terrain cache's backing stores now rather than whenever the collector gets to them
