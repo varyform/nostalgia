@@ -110,6 +110,7 @@ list.innerHTML = GAMES.map(
 const rows = [...list.children];
 
 $('#count').textContent = `${games.length} game(s)`;
+$('#free').textContent = `${Number(import.meta.env.BYTES_FREE).toLocaleString('en-US')} bytes free`;
 
 function moveBar() {
   const r = rows[index];

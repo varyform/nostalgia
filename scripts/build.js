@@ -20,4 +20,6 @@ const run = name =>
       code === 0 ? ok(console.log(`✓ ${name} → ${PAGES[name].out}`)) : fail(new Error(`${name} failed (${code})`)),
     );
   });
-await Promise.all(names.map(run));
+// the launcher goes last: it counts the games' compiled sizes for its disk-free line
+await Promise.all(names.filter(n => n !== 'index').map(run));
+if (names.includes('index')) await run('index');
