@@ -103,6 +103,10 @@
         body {
           overscroll-behavior: none;
         }
+        /* a game is up: wheel and keys that it doesn't use must not scroll the launcher behind it */
+        html.is-playing {
+          overflow: hidden;
+        }
         html {
           background:
             radial-gradient(
@@ -782,6 +786,9 @@
         <button class="menubar__item menubar__item--wide" data-action="crt">
           S<span class="hk">c</span>anlines: <span data-state="crt"></span>
         </button>
+        <button class="menubar__item menubar__item--wide" data-action="fullscreen" data-fullscreen>
+          <span class="hk">F</span>ull screen: <span data-state="fullscreen"></span>
+        </button>
         <span class="menubar__clock" id="clock"></span>
       </header>
 
@@ -829,6 +836,10 @@
         <button class="key" data-action="crt" data-pressed="crt">
           <span class="key__n"><input-glyph action="crt"></input-glyph></span><span class="key__l">Scanlines</span>
         </button>
+        <button class="key" data-action="fullscreen" data-pressed="fullscreen" data-fullscreen>
+          <span class="key__n"><input-glyph action="fullscreen"></input-glyph></span
+          ><span class="key__l">Full screen</span>
+        </button>
         <span class="key key--hint"
           ><span class="key__n"><input-glyph action="select"></input-glyph></span
           ><span class="key__l">Select</span></span
@@ -863,6 +874,8 @@
           <dd>PC speaker on / off</dd>
           <dt><input-glyph action="crt" all></input-glyph></dt>
           <dd>Scanlines on / off</dd>
+          <dt data-fullscreen><input-glyph action="fullscreen" all></input-glyph></dt>
+          <dd data-fullscreen>Full screen on / off</dd>
           <dt><input-glyph action="quit" all></input-glyph></dt>
           <dd>Exit to DOS</dd>
         </dl>

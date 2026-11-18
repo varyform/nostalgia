@@ -417,6 +417,7 @@ const stage = {
     if (!f || this.playing) return;
     this.playing = f;
     const { k, x, y, left, top } = this.boxTransform();
+    document.documentElement.classList.add('is-playing');
     f.style.transform = `translate(${left + x}px, ${top + y}px) scale(${k})`;
     f.classList.add('is-playing');
     if (!reduceMotion.matches) {
@@ -437,6 +438,8 @@ const stage = {
   async exit() {
     const f = this.playing;
     if (!f) return;
+    // unlock first: a returning scrollbar moves the box, and the frame must land where it is now
+    document.documentElement.classList.remove('is-playing');
     const { k, x, y, left, top } = this.boxTransform();
     f.blur();
     if (!reduceMotion.matches) {
@@ -515,13 +518,38 @@ function noDisk(cv, { reducedMotion }) {
 }
 
 // ---------- prefs UI ----------
+// fullscreen is the browser's state, not a saved pref: it can only start from a key press or click
+const fullscreen = {
+  get on() {
+    return !!(document.fullscreenElement ?? document.webkitFullscreenElement);
+  },
+  supported: !!(document.fullscreenEnabled ?? document.webkitFullscreenEnabled),
+  toggle() {
+    const d = document,
+      el = d.documentElement;
+    const done = this.on
+      ? d.exitFullscreen
+        ? d.exitFullscreen()
+        : d.webkitExitFullscreen?.()
+      : el.requestFullscreen
+        ? el.requestFullscreen()
+        : el.webkitRequestFullscreen?.();
+    done?.catch?.(() => {}); // refused (no user gesture, policy): nothing to undo
+    beep(this.on ? 660 : 1320, 0.04);
+  },
+};
+const state = key => (key === 'fullscreen' ? fullscreen.on : !!prefs[key]);
 function applyPrefs() {
   document.documentElement.classList.toggle('no-crt', !prefs.crt);
   $$('[data-state]').forEach(el => {
-    el.textContent = prefs[el.dataset.state] ? 'On' : 'Off';
+    el.textContent = state(el.dataset.state) ? 'On' : 'Off';
   });
-  $$('[data-pressed]').forEach(el => el.setAttribute('aria-pressed', String(!!prefs[el.dataset.pressed])));
+  $$('[data-pressed]').forEach(el => el.setAttribute('aria-pressed', String(state(el.dataset.pressed))));
 }
+// no element fullscreen (iPhone Safari): leave its controls out
+if (!fullscreen.supported) $$('[data-fullscreen]').forEach(el => (el.hidden = true));
+document.addEventListener('fullscreenchange', applyPrefs);
+document.addEventListener('webkitfullscreenchange', applyPrefs);
 const toggle = key => {
   prefs[key] = !prefs[key];
   save();
@@ -540,6 +568,7 @@ const actions = {
   },
   sound: () => toggle('sound'),
   crt: () => toggle('crt'),
+  fullscreen: () => fullscreen.supported && fullscreen.toggle(),
   run,
   quit,
 };
@@ -625,6 +654,8 @@ addEventListener('keydown', e => {
     m: actions.sound,
     F3: actions.crt,
     c: actions.crt,
+    F4: actions.fullscreen,
+    f: actions.fullscreen,
     F10: quit,
     q: quit,
   };
@@ -651,6 +682,7 @@ const input = createInput({
     help: { keys: ['F1', 'KeyH'], pad: ['Select'] },
     sound: { keys: ['F2', 'KeyM'], pad: ['West'] },
     crt: { keys: ['F3', 'KeyC'], pad: ['North'] },
+    fullscreen: { keys: ['F4', 'KeyF'], pad: ['R1'] },
     quit: { keys: ['F10', 'KeyQ'], pad: ['East'] },
   },
   display: {
@@ -674,6 +706,7 @@ const PAD = {
   Select: actions.help,
   West: actions.sound,
   North: actions.crt,
+  R1: actions.fullscreen,
   East: quit,
 };
 input.onPad(k => {

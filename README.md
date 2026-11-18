@@ -25,6 +25,7 @@ Open `dist/index.html` in a desktop or mobile browser (or any game's file direct
 | `F1`           | Help                    |
 | `F2` / `M`     | Sound on/off            |
 | `F3` / `C`     | Scanlines on/off        |
+| `F4` / `F`     | Full screen on/off      |
 | `F10` / `Q`    | Exit to DOS             |
 
 Run zooms the game out of its preview. To come back, leave from the game's title screen (Skyhook: `Q` / Select,
