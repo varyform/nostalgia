@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
-import { canvasPoint, fitPixels, fitWide, fixedLoop, listeners, storage } from './runtime.ts';
+import { canvasPoint, fitPixels, fitWide, fixedLoop, listeners, storage, toggleFullscreen } from './runtime.ts';
 
 type Win = EventTarget & { innerWidth: number; innerHeight: number; devicePixelRatio: number };
 let win: Win, doc: EventTarget;
@@ -171,6 +171,46 @@ describe('storage', () => {
     expect(s.load(1)).toBe(1);
     s.save(9);
     expect(items.get('k')).toBe('5');
+  });
+});
+
+describe('toggleFullscreen', () => {
+  const flush = () => new Promise(r => setTimeout(r, 0));
+  it('enters and leaves, and locks the orientation when asked', async () => {
+    const calls: string[] = [];
+    const d = {
+      fullscreenElement: null as unknown,
+      exitFullscreen: async () => void calls.push('exit'),
+      documentElement: {
+        requestFullscreen: async (o: FullscreenOptions) => void calls.push('enter ' + o.navigationUI),
+      },
+    };
+    vi.stubGlobal('document', d);
+    vi.stubGlobal('screen', { orientation: { lock: async (o: string) => void calls.push('lock ' + o) } });
+    toggleFullscreen();
+    await flush();
+    toggleFullscreen({ orientation: 'landscape' });
+    await flush();
+    d.fullscreenElement = d.documentElement;
+    toggleFullscreen({ orientation: 'landscape' });
+    await flush();
+    expect(calls).toEqual(['enter hide', 'enter hide', 'lock landscape', 'exit']);
+  });
+
+  it('uses the WebKit-prefixed API only when asked', () => {
+    const calls: string[] = [];
+    const d = {
+      webkitFullscreenElement: null as unknown,
+      webkitExitFullscreen: () => void calls.push('exit'),
+      documentElement: { webkitRequestFullscreen: () => void calls.push('enter') },
+    };
+    vi.stubGlobal('document', d);
+    toggleFullscreen();
+    toggleFullscreen({ webkit: true });
+    d.webkitFullscreenElement = d.documentElement;
+    toggleFullscreen();
+    toggleFullscreen({ webkit: true });
+    expect(calls).toEqual(['enter', 'exit']); // unprefixed only: nothing to call
   });
 });
 

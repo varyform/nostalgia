@@ -3,8 +3,10 @@
 // boot(canvas, { demo: true, pilot }) is attract mode (?demo=on, the launcher's preview): the
 // same simulation and renderer with no DOM besides the canvas, no listeners, no audio, no
 // storage, and the autopilot (autopilot.js) at the controls. onExit returns to the launcher.
+import { listeners, storage } from '@nostalgia/game/runtime';
 import { createInput, menuNav, glyphHTML } from '@nostalgia/input';
 import meta from '../game.json';
+import { createAudio } from './audio.js';
 /* =====================================================================
    helpers
    ===================================================================== */
@@ -44,71 +46,6 @@ function mkCanvas(w,h){const c=document.createElement('canvas');c.width=w;c.heig
 if(!CanvasRenderingContext2D.prototype.roundRect){
   CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){r=Math.min(typeof r==='number'?r:4,w/2,h/2);this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath();};
 }
-
-/* =====================================================================
-   audio (all synthesized)
-   ===================================================================== */
-function makeAudio(){return{
-  ctx:null,master:null,muted:false,noise:null,loops:{},
-  unlock(){
-    if(this.ctx){if(this.ctx.state==='suspended')this.ctx.resume();return;}
-    const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
-    try{
-      const c=this.ctx=new AC();
-      this.master=c.createGain();this.master.gain.value=this.muted?0:0.55;
-      const comp=c.createDynamicsCompressor();comp.threshold.value=-14;comp.ratio.value=4;
-      this.master.connect(comp);comp.connect(c.destination);
-      const len=c.sampleRate*2,b=c.createBuffer(1,len,c.sampleRate),d=b.getChannelData(0);
-      for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
-      this.noise=b;
-    }catch{this.ctx=null;}
-  },
-  ok(v){return this.ctx&&this.ctx.state==='running'&&v>0.01;},
-  setMuted(m){this.muted=m;if(this.master)this.master.gain.value=m?0:0.55;},
-  noiseHit(t,vol,dur,type,freq,freqEnd,q=0.7){
-    const c=this.ctx,s=c.createBufferSource();s.buffer=this.noise;
-    const f=c.createBiquadFilter();f.type=type;f.Q.value=q;f.frequency.setValueAtTime(freq,t);if(freqEnd)f.frequency.exponentialRampToValueAtTime(freqEnd,t+dur);
-    const g=c.createGain();g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
-    s.connect(f);f.connect(g);g.connect(this.master);s.start(t,Math.random()*1.2);s.stop(t+dur+0.05);
-  },
-  osc(t,vol,dur,type,f0,f1){
-    const c=this.ctx,o=c.createOscillator();o.type=type;o.frequency.setValueAtTime(f0,t);if(f1)o.frequency.exponentialRampToValueAtTime(f1,t+dur);
-    const g=c.createGain();g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
-    o.connect(g);g.connect(this.master);o.start(t);o.stop(t+dur+0.05);
-  },
-  shot(v=1,p=1){if(!this.ok(v))return;const t=this.ctx.currentTime;this.noiseHit(t,0.75*v,0.16,'lowpass',6000*p,500);this.noiseHit(t,0.3*v,0.5,'lowpass',900*p,120);this.osc(t,0.55*v,0.12,'sine',170*p,45);},
-  boom(v=1,big=1){if(!this.ok(v))return;const t=this.ctx.currentTime;this.noiseHit(t,1.0*v,1.3*big,'lowpass',1400,60);this.noiseHit(t,0.45*v,0.35,'bandpass',2500,400,0.5);this.osc(t,0.9*v,0.9*big,'sine',90,24);},
-  tone(f,d,type='sine',v=0.2,f1){if(!this.ok(v))return;this.osc(this.ctx.currentTime,v,d,type,f,f1);},
-  toneAt(delay,f,d,type,v,f1){if(!this.ok(v))return;this.osc(this.ctx.currentTime+delay,v,d,type,f,f1);},
-  pickup(){this.tone(660,0.09,'triangle',0.18);this.toneAt(0.08,990,0.14,'triangle',0.18);},
-  alert(){this.tone(880,0.12,'square',0.07);this.toneAt(0.13,620,0.22,'square',0.07);},
-  beep(v=1){this.tone(1900,0.05,'square',0.05*v);},
-  click(){this.tone(2400,0.02,'square',0.06);},
-  clink(v){this.tone(3200,0.05,'triangle',0.06*v);},
-  hurt(){if(!this.ok(1))return;const t=this.ctx.currentTime;this.noiseHit(t,0.35,0.14,'bandpass',800,260,1.2);this.osc(t,0.15,0.18,'sawtooth',180,90);},
-  reload(){this.tone(1200,0.04,'square',0.05);this.toneAt(0.55,900,0.05,'square',0.05);this.toneAt(1.25,1500,0.05,'square',0.06);},
-  getLoop(name){
-    if(this.loops[name])return this.loops[name];
-    const c=this.ctx,g=c.createGain();g.gain.value=0;g.connect(this.master);
-    const nsrc=()=>{const s=c.createBufferSource();s.buffer=this.noise;s.loop=true;s.start();return s;};
-    if(name==='plane'){
-      const f=c.createBiquadFilter();f.type='lowpass';f.frequency.value=300;
-      for(const fr of[58,61.5]){const o=c.createOscillator();o.type='sawtooth';o.frequency.value=fr;o.connect(f);o.start();}
-      const nf=c.createBiquadFilter();nf.type='lowpass';nf.frequency.value=520;const ng=c.createGain();ng.gain.value=0.6;
-      nsrc().connect(nf);nf.connect(ng);ng.connect(g);f.connect(g);
-    }else if(name==='rotor'){
-      const f=c.createBiquadFilter();f.type='lowpass';f.frequency.value=450;const am=c.createGain();am.gain.value=0.5;
-      const lfo=c.createOscillator();lfo.frequency.value=11;const lg=c.createGain();lg.gain.value=0.5;lfo.connect(lg);lg.connect(am.gain);lfo.start();
-      nsrc().connect(f);f.connect(am);am.connect(g);
-    }else{
-      const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=700;f.Q.value=0.4;nsrc().connect(f);f.connect(g);
-    }
-    return(this.loops[name]={gain:g});
-  },
-  setLoop(name,vol){if(!this.ctx)return;const L=this.getLoop(name);L.gain.gain.setTargetAtTime(vol,this.ctx.currentTime,0.2);},
-  stopLoops(){for(const k in this.loops)this.setLoop(k,0);},
-  close(){if(this.ctx){void this.ctx.close().catch(()=>{});this.ctx=null;this.loops={};}}
-};}
 
 /* =====================================================================
    data
@@ -499,8 +436,8 @@ function getChunk(w,cx,cy,frame){
    ===================================================================== */
 export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot=null,sound=true,onExit=null}={}){
   // dom: the standalone page, with its screens, HUD, listeners, sound and saved scores
-  const dom=!demo,offs=[],listen=(t,type,fn)=>{t.addEventListener(type,fn);offs.push(()=>t.removeEventListener(type,fn));};
-  const audio=makeAudio();audio.muted=!sound;if(!dom)audio.unlock=()=>{};
+  const dom=!demo,{listen,offAll}=listeners();
+  const audio=createAudio({on:sound});if(!dom)audio.unlock=()=>{};   // audio.js
   const cv=canvas,ctx=cv.getContext('2d'),darkCv=mkCanvas(2,2),darkCtx=darkCv.getContext('2d');
   const miniCv=dom?$('mini'):null,miniCtx=miniCv&&miniCv.getContext('2d');
   let CW=0,CH=0,DPR=1,VIGNETTE=null;
@@ -540,7 +477,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     listen(cv,'mousedown',()=>audio.unlock());
     listen(cv,'contextmenu',e=>e.preventDefault());
     listen(window,'blur',()=>{if(inPlay()&&!G.paused)setPaused(true);});
-    input.on('mute',()=>{audio.setMuted(!audio.muted);toast(audio.muted?'Sound off':'Sound on');});
+    input.on('mute',()=>{audio.setOn(!audio.on);toast(audio.on?'Sound on':'Sound off');});
     // pad Start outside play goes forward: the focused operation card or the screen's primary button (Start, Start deploys)
     input.on('pause',()=>{if(inPlay())setPaused(!G.paused);else if(padAim()){const f=menuFocus(),el=f&&f.classList.contains('mcard')?f:menuDefault();if(el)el.click();}});
     input.on('back',()=>{if(G.state==='brief')toTitle();else if(G.state==='title'&&onExit)onExit();});
@@ -572,7 +509,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
   }
   function toast(msg,t=2.6){if(!dom)return;const el=$('toast');el.innerHTML=msg;el.classList.add('show');G.toastT=t;}
   function flak(x,y){addFlash(x,y,260,0.25,'255,180,90');puff(x,y,6,'dark',60,40,2.4,0.6);for(let i=0;i<6;i++){const a=rnd()*TAU;addP({type:'fire',x,y,vx:Math.cos(a)*90,vy:Math.sin(a)*90,life:0.3,max:0.3,size:22,grow:30,drag:3});}
-    audio.boom(0.25,0.6);G.cam.shake=Math.max(G.cam.shake,4);rumble(90,0.25,0.35);}
+    audio.sfx('boom',{vol:0.25,size:0.6});G.cam.shake=Math.max(G.cam.shake,4);rumble(90,0.25,0.35);}
 
   /* =====================================================================
      mission flow
@@ -596,12 +533,12 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     G.state='flight';G.cam.x=G.plane.x;G.cam.y=G.plane.y-140;G.cam.zf=0.45;G.timeLeft=M.time;G.flakT=0;
     if(dom){$('hMission').textContent=`${M.code} · Operation ${M.name}`;
       show(null);$('hud').classList.remove('hidden');for(const k in hudCache)delete hudCache[k];}
-    audio.unlock();audio.setLoop('plane',0.35);
+    audio.unlock();audio.loop('plane',0.35);
     toast(`Over the drop area. ${glyphHTML('pod')} drops a supply pod, ${glyphHTML('jump')} jumps.`,4);
   }
   function jump(){
     const pl=G.plane;G.player=makePlayer(pl.x,pl.y+20);G.state='para';pl.leaving=true;pl.t=0;
-    audio.setLoop('wind',0.22);toast(pl.y<=G.aaY+2?'Flak line! You are out of the door.':`Out of the door. Steer your canopy with ${glyphHTML('move')}.`);
+    audio.loop('wind',0.22);toast(pl.y<=G.aaY+2?'Flak line! You are out of the door.':`Out of the door. Steer your canopy with ${glyphHTML('move')}.`);
   }
   function checkObjectives(){
     const w=G.world;if(G.objDone||!w.targets.every(t=>t.done))return;
@@ -635,7 +572,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     $('eStats').innerHTML=[['Hostiles neutralized',G.stats.kills],['Bunkers destroyed',G.stats.bunkers],['Objectives',`${objs}/${tot}`],['Accuracy',acc+'%'],['Time in the field',fmtTime(used)],['Supply pods recovered',`${pods}/${w.pods.length}`]]
       .map(([k,v])=>`<div>${k}<b>${v}</b></div>`).join('');
     $('eScore').textContent=score.toLocaleString();$('eRank').textContent=rank;
-    if(win){try{const key='dropzone-best-'+G.sel,b=+localStorage.getItem(key)||0;if(score>b)localStorage.setItem(key,score);}catch{/* storage blocked */}}
+    if(win){const best=storage('dropzone-best-'+G.sel),b=+best.load(0)||0;if(score>b)best.save(score);}
     show('end');
   }
   function setPaused(p){G.paused=p;show(p?'pause':null);if(p)playing(false);else if(G.state==='ground')playing(true);}
@@ -690,21 +627,21 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
       m=aimPoint(p);}
     else{m=screenToWorld(mouse.x,mouse.y);p.ang=Math.atan2(m.y-p.y,m.x-p.x);}
     if(p.reloadT>0){p.reloadT-=dt;if(p.reloadT<=0){p.ammo=30;p.mags--;}}
-    if(pr('reload')&&p.reloadT<=0&&p.ammo<30){if(p.mags>0){p.reloadT=1.5;audio.reload();}else toast('No magazines left');}
+    if(pr('reload')&&p.reloadT<=0&&p.ammo<30){if(p.mags>0){p.reloadT=1.5;audio.sfx('reload');}else toast('No magazines left');}
     if(hd('fire')&&!p.interacting&&p.fireCd<=0&&p.reloadT<=0){
       if(p.ammo>0)playerFire();
-      else if(p.mags>0){p.reloadT=1.5;audio.reload();}
-      else{audio.click();p.fireCd=0.35;toast('Out of ammo');}
+      else if(p.mags>0){p.reloadT=1.5;audio.sfx('reload');}
+      else{audio.sfx('click');p.fireCd=0.35;toast('Out of ammo');}
     }
     if(pr('grenade')&&p.throwCd<=0){if(p.grenades>0)throwGrenade(m.x,m.y);else toast('No grenades');}
-    if(pr('charge')){if(p.charges>0){p.charges--;G.charges.push({x:p.x+Math.cos(p.ang)*10,y:p.y+Math.sin(p.ang)*10,t:5,beep:0});audio.beep();toast('Charge armed, 5 seconds. Move!');}else toast('No demolition charges');}
-    if(pr('medkit')){if(p.medkits<=0)toast('No medkits');else if(p.hp>=100)toast('Already at full health');else{p.medkits--;p.hp=Math.min(100,p.hp+60);audio.pickup();toast('+60 health');}}
+    if(pr('charge')){if(p.charges>0){p.charges--;G.charges.push({x:p.x+Math.cos(p.ang)*10,y:p.y+Math.sin(p.ang)*10,t:5,beep:0});audio.sfx('beep');toast('Charge armed, 5 seconds. Move!');}else toast('No demolition charges');}
+    if(pr('medkit')){if(p.medkits<=0)toast('No medkits');else if(p.hp>=100)toast('Already at full health');else{p.medkits--;p.hp=Math.min(100,p.hp+60);audio.sfx('pickup');toast('+60 health');}}
     const it=w.targets.find(t=>t.type==='intel'&&!t.done&&dist(t.x,t.y,p.x,p.y)<46);
     p.interacting=false;G.hintNear='';
-    if(it){if(hd('interact')){p.interacting=true;p.interactT+=dt;if(p.interactT>=1.8){it.done=true;p.interactT=0;audio.pickup();toast('Codebook secured');checkObjectives();}}else{p.interactT=0;G.hintNear=`Hold ${glyphHTML('interact')} to take the codebook`;}}
+    if(it){if(hd('interact')){p.interacting=true;p.interactT+=dt;if(p.interactT>=1.8){it.done=true;p.interactT=0;audio.sfx('pickup');toast('Codebook secured');checkObjectives();}}else{p.interactT=0;G.hintNear=`Hold ${glyphHTML('interact')} to take the codebook`;}}
     else p.interactT=0;
-    for(const pod of w.pods)if(pod.landed&&!pod.collected&&dist(pod.x,pod.y,p.x,p.y)<26){pod.collected=true;p.mags+=3;p.grenades+=2;p.charges+=1;p.medkits+=1;audio.pickup();toast('Supply pod: +3 mags · +2 grenades · +1 charge · +1 medkit',3.2);}
-    for(let i=w.pickups.length-1;i>=0;i--){const k=w.pickups[i];if(dist(k.x,k.y,p.x,p.y)<22){p.mags++;w.pickups.splice(i,1);audio.pickup();toast('+1 magazine');}}
+    for(const pod of w.pods)if(pod.landed&&!pod.collected&&dist(pod.x,pod.y,p.x,p.y)<26){pod.collected=true;p.mags+=3;p.grenades+=2;p.charges+=1;p.medkits+=1;audio.sfx('pickup');toast('Supply pod: +3 mags · +2 grenades · +1 charge · +1 medkit',3.2);}
+    for(let i=w.pickups.length-1;i>=0;i--){const k=w.pickups[i];if(dist(k.x,k.y,p.x,p.y)<22){p.mags++;w.pickups.splice(i,1);audio.sfx('pickup');toast('+1 magazine');}}
     for(const mn of w.mines){if(mn.dead)continue;const d=dist(mn.x,mn.y,p.x,p.y);
       if(!mn.found&&d<(p.stance==='stand'?26:64)){mn.found=true;toast('Mine spotted!');}
       if(d<10){mn.dead=true;explode(mn.x,mn.y,70,85,{src:'mine'});if(p.hp<=0)return;}}
@@ -717,7 +654,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     p.bloom=Math.min(0.06,p.bloom+0.012);spread+=p.bloom;
     const a=p.ang+(rnd()-0.5)*2*spread,ca=Math.cos(p.ang),sa=Math.sin(p.ang),mx=p.x+ca*22-sa*1.5,my=p.y+sa*22+ca*1.5;
     G.bullets.push({x:mx,y:my,vx:Math.cos(a)*1300,vy:Math.sin(a)*1300,life:0.55,owner:'p',dmg:30+rnd()*12});
-    addFlash(mx,my,150,0.06,'255,210,140');audio.shot(1,1);G.cam.shake=Math.max(G.cam.shake,2);
+    addFlash(mx,my,150,0.06,'255,210,140');audio.sfx('shot',{vol:1,pitch:1});G.cam.shake=Math.max(G.cam.shake,2);
     addP({type:'shell',x:p.x,y:p.y,vx:Math.cos(p.ang+1.6)*rr(60,110),vy:Math.sin(p.ang+1.6)*rr(60,110),z:6,vz:rr(60,120),life:1.2,max:1.2,rot:rnd()*TAU});
     noiseAt(p.x,p.y,G.world.T.dark?560:460,1,true);
   }
@@ -726,12 +663,12 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     const maxR=p.stance==='prone'?170:p.stance==='crouch'?250:310;let dx=tx-p.x,dy=ty-p.y;const d=Math.hypot(dx,dy)||1,dd=Math.min(d,maxR);dx=dx/d*dd;dy=dy/d*dd;
     const t=clamp(dd/360,0.35,0.95),z0=14,vz=(0.5*900*t*t-z0)/t;
     G.grenades.push({x:p.x+Math.cos(p.ang)*8,y:p.y+Math.sin(p.ang)*8,z:z0,vx:dx/t,vy:dy/t,vz,fuse:2.2,spin:0,rest:false});
-    audio.tone(500,0.05,'triangle',0.05);
+    audio.sfx('toss');
   }
   function damagePlayer(dmg){
     const p=G.player;if(!p||p.hp<=0||p.boarded)return;
     p.hp-=dmg;if(!dom&&p.hp<35)p.hp=35;   // attract mode: the ranger takes hits but stays up
-    p.hurtT=0.4;G.hurt=Math.min(1,G.hurt+dmg/40);audio.hurt();G.cam.shake=Math.max(G.cam.shake,6);rumble(150,Math.min(1,0.4+dmg/50),0.5);
+    p.hurtT=0.4;G.hurt=Math.min(1,G.hurt+dmg/40);audio.sfx('hurt');G.cam.shake=Math.max(G.cam.shake,6);rumble(150,Math.min(1,0.4+dmg/50),0.5);
     for(let i=0;i<3;i++)addP({type:'blood',x:p.x+rr(-5,5),y:p.y+rr(-5,5),life:0.8,max:0.8,size:rr(5,9),vx:rr(-20,20),vy:rr(-20,20),drag:3});
     if(p.hp<=0){p.hp=0;G.state='dead';G.endT=2.6;toast('Ranger down',3);playing(false);}
   }
@@ -741,7 +678,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
      ===================================================================== */
   function setAlert(e,shout){
     const p=G.player;
-    if(e.state!=='alert'){e.reactT=0.45*G.diff.react+rnd()*0.3;if(G.time-G.lastAlertSfx>3){audio.alert();G.lastAlertSfx=G.time;}}
+    if(e.state!=='alert'){e.reactT=0.45*G.diff.react+rnd()*0.3;if(G.time-G.lastAlertSfx>3){audio.sfx('alert');G.lastAlertSfx=G.time;}}
     e.state='alert';e.aware=1;e.lastX=p.x;e.lastY=p.y;e.lostT=0;
     if(shout)for(const o of G.world.enemies){if(o===e||o.state==='dead'||o.state==='alert')continue;
       if(dist(o.x,o.y,e.x,e.y)<320){o.state='search';o.lastX=o.tx=p.x+rr(-40,40);o.lastY=o.ty=p.y+rr(-40,40);o.searchT=10;o.wait=0;o.aware=Math.max(o.aware,0.65);}}
@@ -762,7 +699,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     let spread=0.05/G.diff.acc+(p.stance==='prone'?0.05:p.stance==='crouch'?0.02:0)+(p.moving?0.025:0);
     const a=e.ang+(rnd()-0.5)*2*spread,mx=e.x+Math.cos(e.ang)*22,my=e.y+Math.sin(e.ang)*22;
     G.bullets.push({x:mx,y:my,vx:Math.cos(a)*900,vy:Math.sin(a)*900,life:0.75,owner:'e',dmg:G.diff.dmg*(0.8+rnd()*0.4)});
-    e.flash=0.05;addFlash(mx,my,110,0.06,'255,200,120');audio.shot(volAt(e.x,e.y)*0.8,0.82);
+    e.flash=0.05;addFlash(mx,my,110,0.06,'255,200,120');audio.sfx('shot',{vol:volAt(e.x,e.y)*0.8,pitch:0.82});
   }
   function killEnemy(e){
     if(e.state==='dead')return;
@@ -840,7 +777,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
       if(ground){d=dist(b.x,b.y,p.x,p.y);
         if(d<(b.aware>=1?470:360*G.pVis)){a=Math.atan2(p.y-b.y,p.x-b.x);
           if(Math.abs(angDiff(b.face,a))<1.35&&losFactor(w,b.x+Math.cos(a)*30,b.y+Math.sin(a)*30,p.x,p.y)>0.25)sees=true;}}
-      if(sees){if(b.aware<1){b.aware+=dt*(0.8+1.5*(1-d/360))*G.diff.aware;if(b.aware>=1){b.aware=1;b.reactT=0.6*G.diff.react;if(G.time-G.lastAlertSfx>3){audio.alert();G.lastAlertSfx=G.time;}}}b.lostT=0;}
+      if(sees){if(b.aware<1){b.aware+=dt*(0.8+1.5*(1-d/360))*G.diff.aware;if(b.aware>=1){b.aware=1;b.reactT=0.6*G.diff.react;if(G.time-G.lastAlertSfx>3){audio.sfx('alert');G.lastAlertSfx=G.time;}}}b.lostT=0;}
       else{b.lostT+=dt;if(b.aware>=1&&b.lostT>4)b.aware=0.6;if(b.aware<1)b.aware=Math.max(0,b.aware-dt*0.1);}
       const target=sees&&b.aware>=1?a:b.face+Math.sin(G.time*0.4+b.x)*0.9;
       b.aim=turnTo(b.aim,b.face+clamp(angDiff(b.face,target),-1.35,1.35),dt*(b.aware>=1?1.8:0.6));
@@ -849,7 +786,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
       if(b.burst>0){b.burstT-=dt;if(b.burstT<=0){b.burst--;b.burstT=0.09;
         const pl=G.player,spread=0.07/G.diff.acc+(pl.stance==='prone'?0.04:0),an=b.aim+(rnd()-0.5)*2*spread,mx=b.x+Math.cos(b.aim)*32,my=b.y+Math.sin(b.aim)*32;
         G.bullets.push({x:mx,y:my,vx:Math.cos(an)*950,vy:Math.sin(an)*950,life:0.7,owner:'e',dmg:G.diff.dmg*1.1});
-        b.flash=0.05;addFlash(mx,my,130,0.06,'255,200,120');audio.shot(volAt(b.x,b.y)*0.9,0.7);}}
+        b.flash=0.05;addFlash(mx,my,130,0.06,'255,200,120');audio.sfx('shot',{vol:volAt(b.x,b.y)*0.9,pitch:0.7});}}
     }
   }
   function destroyBunker(b){
@@ -872,7 +809,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
      ===================================================================== */
   function explode(x,y,r,dmg,o={}){
     const w=G.world,v=volAt(x,y);
-    audio.boom(Math.max(0.12,v),o.big?1.5:1);
+    audio.sfx('boom',{vol:Math.max(0.12,v),size:o.big?1.5:1});
     const dc=dist(x,y,G.cam.x,G.cam.y);G.cam.shake=Math.max(G.cam.shake,(o.big?22:14)*clamp(1-dc/1000,0,1));
     const rk=clamp(1-dc/800,0,1);if(rk>0.05)rumble(o.big?380:240,rk,rk*0.7);
     addFlash(x,y,r*3.4,0.55,'255,170,90');
@@ -915,7 +852,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
       const n=G.grenades[i];n.fuse-=dt;n.spin+=dt*(n.rest?2:12);
       if(!n.rest){n.vz-=900*dt;n.z+=n.vz*dt;
         if(n.z<=0){n.z=0;if(isWater(w,n.x,n.y)){n.rest=true;n.vx=n.vy=0;splash(n.x,n.y,6);}
-          else if(n.vz<-120){n.vz=-n.vz*0.28;n.vx*=0.5;n.vy*=0.5;audio.clink(volAt(n.x,n.y));}else{n.vz=0;n.rest=true;}}}
+          else if(n.vz<-120){n.vz=-n.vz*0.28;n.vx*=0.5;n.vy*=0.5;audio.sfx('clink',volAt(n.x,n.y));}else{n.vz=0;n.rest=true;}}}
       else{const f=Math.pow(0.05,dt);n.vx*=f;n.vy*=f;}
       const nx=n.x+n.vx*dt,ny=n.y+n.vy*dt;
       if(n.z<30&&hitsObstacle(w,nx,ny,3)){if(hitsObstacle(w,nx,n.y,3))n.vx*=-0.45;if(hitsObstacle(w,n.x,ny,3))n.vy*=-0.45;}
@@ -925,7 +862,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
   }
   function updateCharges(dt){
     for(let i=G.charges.length-1;i>=0;i--){const c=G.charges[i];c.t-=dt;c.beep-=dt;
-      if(c.beep<=0){audio.beep(volAt(c.x,c.y));c.beep=c.t>2?0.5:c.t>1?0.25:0.1;}
+      if(c.beep<=0){audio.sfx('beep',volAt(c.x,c.y));c.beep=c.t>2?0.5:c.t>1?0.25:0.1;}
       if(c.t<=0){G.charges.splice(i,1);explode(c.x,c.y,130,320,{src:'charge',big:true,water:isWater(G.world,c.x,c.y)});}}
   }
   function updatePending(dt){for(let i=G.pending.length-1;i>=0;i--){const q=G.pending[i];q.t-=dt;if(q.t<=0){G.pending.splice(i,1);explode(q.x,q.y,q.r,q.dmg,q.o);}}}
@@ -954,7 +891,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
   function updatePlaneLeaving(dt){
     const pl=G.plane;if(!pl||!pl.leaving)return;pl.t+=dt;
     pl.heading=turnTo(pl.heading,-Math.PI*0.95,dt*0.35);pl.x+=Math.cos(pl.heading)*pl.speed*dt;pl.y+=Math.sin(pl.heading)*pl.speed*dt;pl.prop+=dt*40;pl.bank=lerp(pl.bank,-0.6,dt);
-    audio.setLoop('plane',0.35*clamp(1-pl.t/7,0,1));
+    audio.loop('plane',0.35*clamp(1-pl.t/7,0,1));
     if(pl.t>12)G.plane=null;
   }
   function updateHeli(dt){
@@ -969,13 +906,13 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     else if(h.state==='landed'){const p=G.player;if(G.state==='ground'&&p.hp>0&&dist(p.x,p.y,h.x,h.y)<62){p.boarded=true;h.state='leaving';G.state='extract';G.endT=3.4;playing(false);toast('Ranger aboard. Dust off!');}}
     else{h.z=Math.min(1.4,h.z+dt*0.35);h.ang=turnTo(h.ang,-Math.PI/2,dt*1.2);h.x+=Math.cos(h.ang)*h.z*220*dt;h.y+=Math.sin(h.ang)*h.z*220*dt;}
     if(h.z<0.5&&rnd()<dt*30){const a=rnd()*TAU;addP({type:'smoke',c:'dust',x:h.x+Math.cos(a)*30,y:h.y+Math.sin(a)*30,vx:Math.cos(a)*rr(120,220),vy:Math.sin(a)*rr(120,220),life:1.2,max:1.2,size:14,grow:30,drag:2,a:0.35});}
-    audio.setLoop('rotor',0.5*volAt(h.x,h.y)+0.04);
+    audio.loop('rotor',0.5*volAt(h.x,h.y)+0.04);
   }
   function updateFlight(dt){
     const pl=G.plane,w=G.world;
     const steer=input.axis('left','right');
     pl.vx=lerp(pl.vx,steer*150,1-Math.exp(-dt*2));pl.x=clamp(pl.x+pl.vx*dt,150,W-150);pl.y-=pl.speed*dt;pl.bank=pl.vx/150;pl.prop+=dt*40;
-    if(pr('pod')&&pl.pods>0){pl.pods--;w.pods.push({x:pl.x,y:pl.y+30,z:1,vx:rr(-10,10),vy:-110,landed:false,collected:false});audio.tone(300,0.12,'triangle',0.12);toast(`Supply pod away, ${pl.pods} left`);}
+    if(pr('pod')&&pl.pods>0){pl.pods--;w.pods.push({x:pl.x,y:pl.y+30,z:1,vx:rr(-10,10),vy:-110,landed:false,collected:false});audio.sfx('pod');toast(`Supply pod away, ${pl.pods} left`);}
     if(pl.y<G.aaY+650&&!pl.warned){pl.warned=true;toast('Flak ahead. Jump before the red line!',3);}
     if(pl.y<G.aaY+750){G.flakT-=dt;if(G.flakT<=0){G.flakT=rr(0.25,0.7);const a=rnd()*TAU,d=rr(120,320);flak(pl.x+Math.cos(a)*d,pl.y+Math.sin(a)*d-100);}}
     if(pr('jump')||pl.y<=G.aaY)jump();
@@ -986,7 +923,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     p.x=clamp(p.x+(mx*85+w.wind)*dt,40,W-40);p.y=clamp(p.y+(my*85-15)*dt,40,H-40);
     if(mx||my)p.ang=turnTo(p.ang,Math.atan2(my,mx),dt*2);
     if(p.z<=0){p.z=0;G.state='ground';p.stance='crouch';p.stanceT=0.5;const f=findFree(w,p.x,p.y,10);p.x=f.x;p.y=f.y;resolve(w,p,9);
-      audio.setLoop('wind',0);puff(p.x,p.y,8,'dust',70,14,1,0.4);toast(`Boots on the ground. ${glyphHTML('map')} shows the map.`,3.5);playing(true);}
+      audio.loop('wind',0);puff(p.x,p.y,8,'dust',70,14,1,0.4);toast(`Boots on the ground. ${glyphHTML('map')} shows the map.`,3.5);playing(true);}
   }
   function updateCamera(dt){
     const c=G.cam;let tx,ty,zf;
@@ -1448,7 +1385,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
   }
   function buildMenu(){
     $('diffSeg').innerHTML=Object.entries(DIFFS).map(([k,d])=>`<button data-d="${k}" class="${k===G.diffKey?'on':''}">${d.label}</button>`).join('');
-    $('missionList').innerHTML=MISSIONS.map((M,i)=>{let best=0;try{best=+localStorage.getItem('dropzone-best-'+i)||0;}catch{/* storage blocked */}
+    $('missionList').innerHTML=MISSIONS.map((M,i)=>{const best=+storage('dropzone-best-'+i).load(0)||0;
       return `<button class="mcard" data-i="${i}"${i===G.sel?' aria-selected="true"':''}><div class="sw" style="background:${M.sw}"><span>${M.code} · ${M.cond}</span></div><h3>${M.name}</h3><p>${M.goal}</p><span class="best">${best?'BEST '+best.toLocaleString():'NOT YET COMPLETED'}</span></button>`;}).join('');
   }
   if(dom){
@@ -1505,8 +1442,8 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
   return{stop(){
     if(stopped)return;stopped=true;
     cancelAnimationFrame(raf);
-    for(const off of offs)off();offs.length=0;
-    if(nav)nav.destroy();input.destroy();audio.close();
+    offAll();
+    if(nav)nav.destroy();input.destroy();audio.destroy();
     // drop the terrain cache's backing stores now rather than whenever the collector gets to them
     if(G.world)for(const c of G.world.chunks.values())c.width=c.height=0;
     G.world=G.player=G.plane=G.heli=null;

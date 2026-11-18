@@ -143,7 +143,7 @@ A game is a folder in `games/`; the build and the launcher find it by its `game.
   from the game's title screen posts `exit`, and the launcher zooms back out (the browser's Back button does too).
 - `@nostalgia/game/runtime` has the page plumbing: `listeners()`, the fixed-step `fixedLoop()` (with the still frame
   for reduced motion), `fitWide()` / `fitPixels()` to size the canvas from the window, `storage()` for saved data,
-  `toggleFullscreen()` and `canvasPoint()`.
+  `toggleFullscreen()` (optionally locking the orientation, with a WebKit-prefixed fallback) and `canvasPoint()`.
 - Each version compiles to one file: `dist/<game>.html`, or `dist/<game>-<version>.html` when there are several.
   `mise run build <game>-<version>` builds one.
 

@@ -164,6 +164,13 @@ export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder 
   class MockDelay extends MockNode {
     readonly delayTime = this.param('delayTime', 0);
   }
+  class MockCompressor extends MockNode {
+    readonly threshold = this.param('threshold', -24);
+    readonly knee = this.param('knee', 30);
+    readonly ratio = this.param('ratio', 12);
+    readonly attack = this.param('attack', 0.003);
+    readonly release = this.param('release', 0.25);
+  }
   class MockBuffer {
     readonly id = ++nextId;
     readonly numberOfChannels: number;
@@ -242,6 +249,9 @@ export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder 
     }
     createDelay(max = 1) {
       return this.#make('createDelay', new MockDelay(this), [max]);
+    }
+    createDynamicsCompressor() {
+      return this.#make('createDynamicsCompressor', new MockCompressor(this));
     }
     createBuffer(ch: number, len: number, sr: number) {
       return this.#make('createBuffer', new MockBuffer(ch, len, sr), [ch, len, sr]);

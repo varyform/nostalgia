@@ -185,14 +185,34 @@ export function storage(
   };
 }
 
-/** Enter or leave full screen; call it from the input event itself, as browsers require. */
-export function toggleFullscreen(): void {
-  const d = document;
-  if (d.fullscreenElement) {
-    void d.exitFullscreen().catch(() => {});
+type Prefixed = {
+  webkitFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | undefined;
+  webkitRequestFullscreen?: (o?: FullscreenOptions) => Promise<void> | undefined;
+};
+
+/**
+ * Enter or leave full screen; call it from the input event itself, as browsers require.
+ * `orientation` locks the screen that way once it is full (phones); `webkit` falls back to
+ * the prefixed API of older Safari.
+ */
+export function toggleFullscreen({
+  orientation,
+  webkit = false,
+}: { orientation?: string; webkit?: boolean } = {}): void {
+  const d = document as Document & Prefixed,
+    el = d.documentElement as HTMLElement & Prefixed;
+  if (d.fullscreenElement || (webkit && d.webkitFullscreenElement)) {
+    void (d.exitFullscreen ? d.exitFullscreen() : d.webkitExitFullscreen?.())?.catch(() => {});
     return;
   }
-  void d.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});
+  const opts: FullscreenOptions = { navigationUI: 'hide' };
+  let p = el.requestFullscreen ? el.requestFullscreen(opts) : webkit ? el.webkitRequestFullscreen?.(opts) : undefined;
+  if (orientation) {
+    const so = screen.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
+    p = p?.then(() => void so?.lock?.(orientation).catch(() => {}));
+  }
+  void p?.catch(() => {});
 }
 
 /** A pointer or touch position in the canvas's own pixels. */

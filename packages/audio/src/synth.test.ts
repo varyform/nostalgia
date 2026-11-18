@@ -154,6 +154,61 @@ describe('createSynth', () => {
     expect(log).toContain('#4.connect(#6)');
   });
 
+  it('plucks (attack 0), envelope floor, tail and lead', () => {
+    const { audio, log } = setup({ attack: 0, floor: 0.001, tail: 0.02, lead: 0 });
+    audio.unlock();
+    rec.time = 1;
+    const n = log.length;
+    audio.sfx('beep');
+    const beep = log.slice(n);
+    expect(beep.filter(l => l.includes('.gain.'))).toEqual([
+      expect.stringMatching(/\.gain\.setValueAtTime\(0\.2,1\)$/),
+      expect.stringMatching(/\.gain\.exponentialRampToValueAtTime\(0\.001,1\.1\)$/),
+    ]);
+    expect(beep.at(-1)).toMatch(/\.stop\(1\.12\)$/);
+    const m = log.length;
+    audio.sfx('noise'); // hiss keeps its own attack unless given one
+    expect(log.slice(m).filter(l => l.includes('.gain.'))[0]).toMatch(/\.gain\.setValueAtTime\(0\.001,1\)$/);
+  });
+
+  it('effects only: no tracks, no sequencer', () => {
+    const audio = createSynth({
+      seed: 1,
+      levels: { master: 1, music: 1, sfx: 1 },
+      arrange: v => ({ effects: { hit: t => v.hiss(t, 0.1, 0.2, 900, 30, 'lowpass', 'sfx', undefined, 0) } }),
+    });
+    audio.unlock();
+    audio.music('a');
+    audio.sfx('hit');
+    expect(rec.log.some(l => l.startsWith('setInterval('))).toBe(false);
+    // no attack, and a sweep down to 30 Hz (the floor is 20)
+    expect(rec.log).toContain('#8.frequency.exponentialRampToValueAtTime(30,0.10500000000000001)');
+    expect(rec.log).toContain('#9.gain.setValueAtTime(0.2,0.005)');
+  });
+
+  it('a compressor, a darkened echo on the sfx bus, a longer noise buffer', () => {
+    const { audio, log } = setup({
+      compressor: { threshold: -14, ratio: 4 },
+      echo: { time: 0.13, feedback: 0.22, wet: 1, cut: 1800, bus: 'sfx' },
+      noiseLength: 2,
+    });
+    audio.unlock();
+    // master #3 → compressor #4 → speakers #2; the sfx bus #6 feeds delay #7 → lowpass #10
+    expect(log.slice(3, 8)).toEqual([
+      '#4=createDynamicsCompressor()',
+      '#4.threshold=-14',
+      '#4.ratio=4',
+      '#4.connect(#2)',
+      '#3.connect(#4)',
+    ]);
+    expect(log).toContain('#6.connect(#7)');
+    expect(log).toContain('#7.connect(#10)');
+    expect(log).toContain('#10.frequency=1800');
+    expect(log).toContain('#10.connect(#8)'); // feedback
+    expect(log).toContain('#10.connect(#9)'); // wet
+    expect(log).toContain('#11=createBuffer(1,200,100)');
+  });
+
   it('merges extra methods and stops on destroy()', () => {
     const audio = createSynth({
       seed: 1,

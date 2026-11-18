@@ -37,17 +37,22 @@
  *
  * Voices (all times are context seconds; bus is 'music' or 'sfx', default 'sfx' except fm):
  *   tone(f0, f1, t, dur, vol, type = 'square', bus, attack)   one oscillator, f0 → f1
- *   hiss(t, dur, vol, f0 = 3000, f1 = 300, filter = 'lowpass', bus, q)   filtered noise
+ *   hiss(t, dur, vol, f0 = 3000, f1 = 300, filter = 'lowpass', bus, q, attack = 0.004)   filtered noise
  *   fm(f, t, dur, vol, ratio = 2, index = 2, bus = 'music')   two-operator FM
  *   notes(midiList, t, gap, dur, vol, type, bus)               a run of tones, 0 = rest
  *   hold(until)                                                music waits until then (a jingle)
  *   env(gain, t, attack, peak, dur), ac, noise, bus.{master,music,sfx}   for custom graphs
  *
+ * An attack of 0 starts a voice at its peak and only decays: a pluck, a blip.
+ *
  * Options: `pulse` makes numeric tone types pulse duty cycles (0.125, 0.25, 0.5);
  * `speaker` turns the whole synth into a PC speaker (square on/off, clicks for noise, a
- * small cone); `echo` adds a slap-back delay on the music bus; `attack` and `startDelay`
- * tune the defaults. Score helpers: midi(n), line('72 - .'), seq('C5 - . | G#4'),
- * span(lead, i, max) — the steps a note lasts with its '-' holds.
+ * small cone); `echo` adds a slap-back delay on the music bus (or `bus: 'sfx'`, with `cut`
+ * darkening the repeats); `compressor` puts one before the speakers; `attack`, `floor`
+ * (the envelopes' silence), `tail` (how long a voice runs on after its envelope), `lead`
+ * (how far after the clock sfx() plays), `noiseLength` and `startDelay` tune the defaults.
+ * Without `tracks` the synth plays effects only. Score helpers: midi(n), line('72 - .'),
+ * seq('C5 - . | G#4'), span(lead, i, max) — the steps a note lasts with its '-' holds.
  */
 export {
   createSynth,

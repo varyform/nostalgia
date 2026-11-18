@@ -21,7 +21,10 @@ export interface Voices {
   readonly noise: AudioBuffer | null;
   /** The bus nodes: music and sfx feed master. */
   readonly bus: { readonly master: GainNode; readonly music: GainNode; readonly sfx: GainNode };
-  /** An attack-decay envelope on g.gain: 0.0001 → peak at t + a → 0.0001 at t + dur (exponential). */
+  /**
+   * An attack-decay envelope on g.gain: floor → peak at t + a → floor at t + dur (exponential;
+   * floor is 0.0001 unless the synth sets it). With a = 0 it starts at the peak, a pluck.
+   */
   env: (g: GainNode, t: number, a: number, peak: number, dur: number) => void;
   /** One oscillator note, sliding f0 → f1 (exponentially) over dur. */
   tone: (f0: number, f1: number, t: number, dur: number, vol: number, type?: Wave, bus?: Bus, attack?: number) => void;
@@ -35,6 +38,7 @@ export interface Voices {
     type?: BiquadFilterType,
     bus?: Bus,
     q?: number,
+    attack?: number,
   ) => void;
   /** Two-operator FM: a sine carrier at f, modulated at f × ratio with a decaying index. */
   fm: (f: number, t: number, dur: number, vol: number, ratio?: number, index?: number, bus?: Bus) => void;
@@ -48,7 +52,7 @@ export type Effect = (t: number, e?: any) => void;
 
 export interface Arrangement<T, M> {
   /** Play step i (16ths from the track's start) of a track at context time t; dt is one step. */
-  step: (track: T, i: number, t: number, dt: number) => void;
+  step?: (track: T, i: number, t: number, dt: number) => void;
   /** sfx(name, e) plays effects[name](now, e). */
   effects: Record<string, Effect>;
   /** Extra methods merged into the returned object (a continuous loop, say). */
@@ -62,10 +66,19 @@ export interface SynthOptions<T extends { bpm: number }, M> {
   levels: Levels;
   /** Seed of the noise buffer (each game keeps its own). */
   seed: number;
-  tracks: Record<string, T>;
+  /** Length of the noise buffer hiss() loops, seconds (default 1). */
+  noiseLength?: number;
+  /** The music; a synth without tracks plays effects only and runs no sequencer. */
+  tracks?: Record<string, T>;
   arrange: (v: Voices) => Arrangement<T, M>;
-  /** tone()'s default attack, seconds (default 0.004). */
+  /** tone()'s default attack, seconds (default 0.004); 0 starts every tone at its peak. */
   attack?: number;
+  /** The level envelopes start from and decay to (default 0.0001). */
+  floor?: number;
+  /** How long a voice keeps running after its envelope ends, before stop() (default 0.05 s). */
+  tail?: number;
+  /** sfx() plays an effect this long after the context clock (default 0.005 s). */
+  lead?: number;
   /** Build pulse waves so a numeric tone type is a duty cycle (default false). */
   pulse?: boolean;
   /**
@@ -74,8 +87,14 @@ export interface SynthOptions<T extends { bpm: number }, M> {
    * lowpass 4200 Hz).
    */
   speaker?: boolean;
-  /** A slap-back echo on the music bus: delay time, feedback and wet gains. */
-  echo?: { time: number; feedback: number; wet: number } | false;
+  /**
+   * A slap-back echo, on the music bus unless `bus` says otherwise: delay time, feedback and
+   * wet gains, and `cut`, a lowpass inside the loop that darkens each repeat (the wet signal
+   * is taken after it).
+   */
+  echo?: { time: number; feedback: number; wet: number; cut?: number; bus?: Bus } | false;
+  /** A compressor between master and the speakers: true for the browser's defaults, or its settings. */
+  compressor?: boolean | Partial<Record<'threshold' | 'knee' | 'ratio' | 'attack' | 'release', number>>;
   /** When music() was asked for before unlock(), its first step plays this long after (default 0.05 s). */
   startDelay?: number;
 }
@@ -99,8 +118,10 @@ const AHEAD = 0.2; // seconds scheduled ahead of the clock
 const NEXT = 0.08; // a new track's first step, from now
 
 export function createSynth<T extends { bpm: number }, M extends object = object>(opts: SynthOptions<T, M>): Synth & M {
-  const { levels, seed, tracks, attack = 0.004, pulse = false, speaker = false, echo = false } = opts;
+  const { levels, seed, tracks = {}, attack = 0.004, pulse = false, speaker = false, echo = false } = opts;
+  const { noiseLength = 1, floor = 0.0001, tail = 0.05, lead = 0.005, compressor = false } = opts;
   const startDelay = opts.startDelay ?? 0.05;
+  const sequenced = Object.keys(tracks).length > 0;
   let ac: AudioContext | null = null,
     master: GainNode | null = null,
     musicBus: GainNode | null = null,
@@ -128,6 +149,14 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     }
     master = ac.createGain();
     master.gain.value = soundOn ? levels.master : 0;
+    let out: AudioNode = ac.destination;
+    if (compressor) {
+      const c = ac.createDynamicsCompressor();
+      if (compressor !== true)
+        for (const [k, v] of Object.entries(compressor)) c[k as keyof typeof compressor].value = v;
+      c.connect(ac.destination);
+      out = c;
+    }
     if (speaker) {
       // a small paper cone: no deep bass, no sparkle
       const hp = ac.createBiquadFilter(),
@@ -136,8 +165,8 @@ export function createSynth<T extends { bpm: number }, M extends object = object
       hp.frequency.value = 180;
       lp.type = 'lowpass';
       lp.frequency.value = 4200;
-      master.connect(hp).connect(lp).connect(ac.destination);
-    } else master.connect(ac.destination);
+      master.connect(hp).connect(lp).connect(out);
+    } else master.connect(out);
     musicBus = ac.createGain();
     musicBus.gain.value = levels.music;
     musicBus.connect(master);
@@ -151,11 +180,19 @@ export function createSynth<T extends { bpm: number }, M extends object = object
       d.delayTime.value = echo.time;
       fb.gain.value = echo.feedback;
       wet.gain.value = echo.wet;
-      musicBus.connect(d);
-      d.connect(fb).connect(d);
-      d.connect(wet).connect(master);
+      busNode(echo.bus ?? 'music').connect(d);
+      let tap: AudioNode = d;
+      if (echo.cut) {
+        const lp = ac.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = echo.cut;
+        d.connect(lp);
+        tap = lp;
+      }
+      tap.connect(fb).connect(d);
+      tap.connect(wet).connect(master);
     }
-    noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+    noise = ac.createBuffer(1, ac.sampleRate * noiseLength, ac.sampleRate);
     const data = noise.getChannelData(0);
     let s = seed;
     for (let k = 0; k < data.length; k++) {
@@ -172,7 +209,7 @@ export function createSynth<T extends { bpm: number }, M extends object = object
         waves[duty] = ac.createPeriodicWave(re, im);
       }
     }
-    timer = setInterval(schedule, TICK);
+    if (sequenced) timer = setInterval(schedule, TICK);
     if (track) {
       i = 0;
       nextT = ac.currentTime + startDelay;
@@ -187,9 +224,11 @@ export function createSynth<T extends { bpm: number }, M extends object = object
   // ---------- voices ----------
   const busNode = (b: Bus) => (b === 'music' ? musicBus : sfxBus)!;
   function env(g: GainNode, t: number, a: number, peak: number, dur: number) {
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(peak, t + a);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    if (a > 0) {
+      g.gain.setValueAtTime(floor, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + a);
+    } else g.gain.setValueAtTime(peak, t);
+    g.gain.exponentialRampToValueAtTime(floor, t + dur);
   }
   function tone(
     f0: number,
@@ -215,7 +254,7 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     } else env(g, t, a, vol, dur);
     o.connect(g).connect(busNode(bus));
     o.start(t);
-    o.stop(t + dur + 0.05);
+    o.stop(t + dur + tail);
   }
   function hiss(
     t: number,
@@ -226,6 +265,7 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     type: BiquadFilterType = 'lowpass',
     bus: Bus = 'sfx',
     q?: number,
+    a = 0.004,
   ) {
     if (speaker) {
       // a buzz of random clicks instead of noise
@@ -241,11 +281,11 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     f.type = type;
     if (q !== undefined) f.Q.value = q;
     f.frequency.setValueAtTime(f0, t);
-    f.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
-    env(g, t, 0.004, vol, dur);
+    f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    env(g, t, a, vol, dur);
     s.connect(f).connect(g).connect(busNode(bus));
     s.start(t, Math.random());
-    s.stop(t + dur + 0.05);
+    s.stop(t + dur + tail);
   }
   function fm(f: number, t: number, dur: number, vol: number, ratio = 2, index = 2, bus: Bus = 'music') {
     const c = ac!.createOscillator(),
@@ -261,8 +301,8 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     c.connect(g).connect(busNode(bus));
     c.start(t);
     m.start(t);
-    c.stop(t + dur + 0.05);
-    m.stop(t + dur + 0.05);
+    c.stop(t + dur + tail);
+    m.stop(t + dur + tail);
   }
   const notes = (list: readonly number[], t: number, gap: number, dur: number, vol: number, type?: Wave, bus?: Bus) =>
     list.forEach((n, k) => n && tone(midi(n), midi(n), t + k * gap, dur, vol, type, bus));
@@ -309,7 +349,7 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     if (!ac || !track) return;
     const dt = 60 / track.bpm / 4;
     while (nextT < ac.currentTime + AHEAD) {
-      if (nextT >= holdUntil) step(track, i, nextT, dt);
+      if (nextT >= holdUntil) step?.(track, i, nextT, dt);
       i++;
       nextT += dt;
     }
@@ -318,7 +358,7 @@ export function createSynth<T extends { bpm: number }, M extends object = object
   // ---------- effects ----------
   function sfx(name: string, e?: unknown) {
     if (!ac || !soundOn || !effects[name]) return;
-    effects[name](ac.currentTime + 0.005, e);
+    effects[name](ac.currentTime + lead, e);
   }
 
   function destroy() {

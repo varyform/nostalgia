@@ -1,6 +1,8 @@
 'use strict';
+import { canvasPoint, fitWide, fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput, drawGlyph, measureGlyph, parsePrompt } from '@nostalgia/input';
 import meta from '../game.json';
+import { createAudio } from './audio.js';
 import { createPilot } from './autopilot.js';
 // SKYHOOK HD — widescreen remaster. World runs in 384x216 units (16:9), drawn as vectors at native resolution.
 
@@ -10,18 +12,13 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   const W = 384, H = 216, PH = 216, DT = 1 / 60, CAP = 4, SAFE_VY = 52, SAFE_VX = 40;
   const g = cv.getContext('2d');
   // everything bound outside the game's own state, undone by stop()
-  const offs = [];
-  function listen(t, type, fn, opts) { t.addEventListener(type, fn, opts); offs.push(() => t.removeEventListener(type, fn, opts)); }
+  const { listen, offAll } = listeners();
   const F = "'Rajdhani','Segoe UI',system-ui,sans-serif";
   let cw = 0, ch = 0, S = 1, u = 1, vign = null;
   const lc = document.createElement('canvas'), lg = lc.getContext('2d');
-  // the largest 16:9 box in the window
-  function fit() {
-    let w = innerWidth, h = innerHeight;
-    if (w / h > 16 / 9) w = h * 16 / 9; else h = w * 9 / 16;
-    const dpr = Math.min(devicePixelRatio || 1, 2, 2560 / w);
-    cv.style.width = Math.round(w) + 'px'; cv.style.height = Math.round(h) + 'px';
-    cw = cv.width = Math.round(w * dpr); ch = cv.height = Math.round(h * dpr);
+  // the largest 16:9 box in the window; the light map and the vignette follow its size
+  function fit(w, h) {
+    cw = w; ch = h;
     lc.width = Math.ceil(cw / 2); lc.height = Math.ceil(ch / 2);
     S = ch / H; u = ch / 1080;
     vign = document.createElement('canvas'); vign.width = cw; vign.height = ch;
@@ -29,8 +26,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,0.55)');
     v.fillStyle = gr; v.fillRect(0, 0, cw, ch);
   }
-  listen(window, 'resize', fit);
-  fit();
+  const unfit = fitWide(cv, { onFit: fit });
 
   // soft sprites
   function radial(stops, size = 64) {
@@ -69,71 +65,8 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   const ov = (ax, ay, aw, ah, bx, by, bw, bh) => ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
   const pad6 = n => String(Math.max(0, n | 0)).padStart(6, '0');
 
-  // ---------- sound ----------
-  let AC = null, master = null, bus = null, soundOn = sound, engine = null, noiseBuf = null;
-  function audioInit() {
-    if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
-    try {
-      AC = new (window.AudioContext || window.webkitAudioContext)();
-      const comp = AC.createDynamicsCompressor(); comp.connect(AC.destination);
-      master = AC.createGain(); master.gain.value = soundOn ? 0.6 : 0; master.connect(comp);
-      const dl = AC.createDelay(), fb = AC.createGain(), lp = AC.createBiquadFilter();
-      dl.delayTime.value = 0.13; fb.gain.value = 0.22; lp.type = 'lowpass'; lp.frequency.value = 1800;
-      bus = AC.createGain(); bus.connect(master); bus.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); lp.connect(master);
-      noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
-      const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    } catch (e) { AC = null; }
-  }
-  function tone(f0, f1, dur, vol = 0.08, type = 'triangle', delay = 0, cut = 5000) {
-    if (!AC) return;
-    const t = AC.currentTime + delay, o = AC.createOscillator(), f = AC.createBiquadFilter(), gn = AC.createGain();
-    o.type = type; o.frequency.setValueAtTime(f0, t);
-    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
-    f.type = 'lowpass'; f.frequency.value = cut;
-    gn.gain.setValueAtTime(0.0001, t); gn.gain.exponentialRampToValueAtTime(vol, t + 0.008); gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(f).connect(gn).connect(bus); o.start(t); o.stop(t + dur + 0.05);
-  }
-  function noise(dur, vol = 0.2, freq = 1000, delay = 0, type = 'lowpass', end = 50) {
-    if (!AC) return;
-    const t = AC.currentTime + delay, s = AC.createBufferSource(), f = AC.createBiquadFilter(), gn = AC.createGain();
-    s.buffer = noiseBuf; s.loop = true; f.type = type;
-    f.frequency.setValueAtTime(freq, t); f.frequency.exponentialRampToValueAtTime(end, t + dur);
-    gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    s.connect(f).connect(gn).connect(bus); s.start(t, Math.random()); s.stop(t + dur + 0.05);
-  }
-  const seq = (notes, d, vol = 0.06, type = 'triangle') => notes.forEach((f, i) => tone(f, f, d * 1.6, vol, type, i * d));
-  const sfx = {
-    shoot: () => { tone(1100, 180, 0.07, 0.03, 'sawtooth', 0, 2400); noise(0.04, 0.05, 4000, 0, 'highpass', 2000); },
-    bomb: () => tone(1500, 280, 0.6, 0.03, 'sine'),
-    boom: () => { noise(0.9, 0.45, 1200, 0, 'lowpass', 40); tone(120, 32, 0.6, 0.22, 'sine'); },
-    big: () => { noise(1.8, 0.6, 900, 0, 'lowpass', 30); tone(95, 22, 1.4, 0.3, 'sine'); },
-    hit: () => tone(700, 250, 0.06, 0.05, 'square', 0, 1800),
-    tink: () => tone(3000, 2600, 0.05, 0.03, 'sine'),
-    pick: () => seq([660, 880, 1320], 0.07, 0.07, 'sine'),
-    saved: () => seq([880, 1175, 1760], 0.07, 0.06, 'sine'),
-    land: () => { noise(0.15, 0.12, 600); tone(180, 120, 0.12, 0.08, 'sine'); },
-    lift: () => tone(160, 420, 0.4, 0.05, 'sine'),
-    launch: () => { noise(0.6, 0.12, 3000, 0, 'bandpass', 800); tone(250, 900, 0.5, 0.03, 'sawtooth', 0, 1500); },
-    beep: () => tone(990, 990, 0.1, 0.05, 'sine'),
-    fuel: () => seq([520, 660, 780, 1040], 0.05, 0.06, 'sine'),
-    jingle: () => seq([523, 659, 784, 1047], 0.09, 0.06),
-    fanfare: () => seq([523, 523, 659, 784, 659, 784, 1047], 0.12, 0.07),
-    die: () => { noise(2, 0.6, 800, 0, 'lowpass', 30); tone(500, 30, 1.4, 0.08, 'sawtooth', 0, 1200); },
-    over: () => seq([392, 330, 262, 196], 0.3, 0.07),
-    life: () => seq([1047, 784, 1047, 1319], 0.07, 0.06, 'sine'),
-  };
-  // rotor: low-passed noise chopped by an LFO
-  function engineSet(on) {
-    if (!AC) return;
-    if (on && !engine) {
-      const s = AC.createBufferSource(), lp = AC.createBiquadFilter(), gn = AC.createGain(), lfo = AC.createOscillator(), lgn = AC.createGain();
-      s.buffer = noiseBuf; s.loop = true; lp.type = 'lowpass'; lp.frequency.value = 200;
-      gn.gain.value = 0.05; lfo.type = 'sine'; lfo.frequency.value = 13; lgn.gain.value = 0.05;
-      lfo.connect(lgn).connect(gn.gain); s.connect(lp).connect(gn).connect(master); s.start(); lfo.start();
-      engine = { o: lp, lfo, s };
-    } else if (!on && engine) { engine.s.stop(); engine.lfo.stop(); engine = null; }
-  }
-  function setSound(on) { soundOn = on; if (master) master.gain.value = on ? 0.6 : 0; }
+  // ---------- sound (audio.js) ----------
+  const audio = createAudio({ on: sound, hd: true });
 
   // ---------- input ----------
   // bindings (actions + prompt-only display entries) from game.json
@@ -144,21 +77,13 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     // the demo hears nothing and stays out of the launcher's <input-glyph> elements
     ...(demo && { target: new EventTarget(), getGamepads: () => [], register: false }),
   });
-  function toggleFullscreen() {
-    const d = document, el = d.documentElement;
-    if (d.fullscreenElement || d.webkitFullscreenElement) { (d.exitFullscreen || d.webkitExitFullscreen).call(d); return; }
-    const req = el.requestFullscreen || el.webkitRequestFullscreen;
-    if (!req) return;
-    const pr = req.call(el, { navigationUI: 'hide' });
-    if (pr && pr.then) pr.then(() => { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); }).catch(() => {});
-  }
+  const fullscreen = () => toggleFullscreen({ orientation: 'landscape', webkit: true });
+  const audioInit = () => audio.unlock();
   if (!demo) {
     // fullscreen must be requested from the input event itself, not from the game loop
-    input.on('fullscreen', toggleFullscreen);
+    input.on('fullscreen', fullscreen);
     listen(window, 'keydown', audioInit);
-    listen(cv, 'dblclick', toggleFullscreen);
-    listen(document, 'fullscreenchange', fit);
-    listen(document, 'webkitfullscreenchange', fit);
+    listen(cv, 'dblclick', fullscreen);
     listen(window, 'blur', () => { if (state === 'play') paused = true; });
   }
   let I = {};
@@ -176,7 +101,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
 
   // ---------- touch ----------
   const TCH = { used: false, stick: null, sx: 0, sy: 0, dx: 0, dy: 0, fire: false, bomb: false };
-  function tpos(t) { const r = cv.getBoundingClientRect(); return { x: (t.clientX - r.left) / r.width * cw, y: (t.clientY - r.top) / r.height * ch }; }
+  const tpos = t => canvasPoint(cv, t);
   const BTN = () => ({
     fire: { x: cw - 150 * u, y: ch - 170 * u, r: 90 * u },
     bomb: { x: cw - 340 * u, y: ch - 110 * u, r: 70 * u },
@@ -199,7 +124,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     if (e.type === 'touchstart') for (const t of e.changedTouches) {
       const q = tpos(t);
       if (state === 'play' && Math.hypot(q.x - b.pause.x, q.y - b.pause.y) < b.pause.r * 1.5) taps.add('pause');
-      else if (state !== 'play') { taps.add('start'); if (state === 'title' && !document.fullscreenElement && !document.webkitFullscreenElement) toggleFullscreen(); }
+      else if (state !== 'play') { taps.add('start'); if (state === 'title' && !document.fullscreenElement && !document.webkitFullscreenElement) fullscreen(); }
       else if (paused) taps.add('pause');
     }
   }
@@ -381,8 +306,9 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   let lv = null, camX = 0, fuel = 100, checkpoint = null, p = null;
   let bullets = [], ebul = [], bombs = [], parts = [], rings = [], pops = [];
   let msgs = null, shake = 0, jetT = 0, clearT = 0, deadT = 0, unloadT = 0, lowFuelT = 0, stuckT = 0, tally = null;
-  try { hiscore = +localStorage.getItem('skyhook-hd-hi') || 0; } catch (e) {}
-  function saveHi() { if (!demo && score > hiscore) { hiscore = score; try { localStorage.setItem('skyhook-hd-hi', hiscore); } catch (e) {} } }
+  const saved = storage('skyhook-hd-hi'); // the demo shows the high score but never saves one
+  hiscore = +saved.load(0) || 0;
+  function saveHi() { if (!demo && score > hiscore) { hiscore = score; saved.save(hiscore); } }
 
   const FL = x => { x = x | 0; return lv.fl[x < 0 ? 0 : x >= lv.L ? lv.L - 1 : x]; };
   const CE = x => { if (!lv.hasCeil) return -50; x = x | 0; return lv.ce[x < 0 ? 0 : x >= lv.L ? lv.L - 1 : x]; };
@@ -409,7 +335,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   }
   function addScore(n) {
     score += n;
-    if (score >= nextLife) { nextLife += 10000; lives = Math.min(lives + 1, 6); sfx.life(); msg(['EXTRA CHOPPER!'], 1.5); }
+    if (score >= nextLife) { nextLife += 10000; lives = Math.min(lives + 1, 6); audio.sfx('life'); msg(['EXTRA CHOPPER!'], 1.5); }
   }
 
   function newGame() { score = 0; lives = 3; mi = 0; loop = 0; nextLife = 10000; startMission(); }
@@ -442,7 +368,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   function crash(reason) {
     if (!p.alive) return;
     p.alive = false; deadT = 2.4; lives--;
-    explode(p.x + 10, p.y + 4, 70, true); sfx.die(); shake = 0.6; engineSet(false);
+    explode(p.x + 10, p.y + 4, 70, true); audio.sfx('die'); shake = 0.6; audio.engine(false);
     for (const s of p.aboard) { s.state = 'wait'; s.x = s.ox; }
     p.aboard = [];
     if (reason) msg([reason], 2);
@@ -451,9 +377,9 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     const saved = lv.spies.filter(s => s.state === 'saved' || s.state === 'walk').length;
     tally = { saved, total: lv.spies.length, fuelB: Math.round(fuel) * 10, full: saved === lv.spies.length ? 2000 : 0 };
     addScore(tally.fuelB + tally.full);
-    state = 'clear'; stT = 0; engineSet(false); sfx.fanfare(); msgs = null;
+    state = 'clear'; stT = 0; audio.engine(false); audio.sfx('fanfare'); msgs = null;
   }
-  function gameOver() { if (demo) return nextMission(); state = 'over'; stT = 0; saveHi(); sfx.over(); msgs = null; }
+  function gameOver() { if (demo) return nextMission(); state = 'over'; stT = 0; saveHi(); audio.sfx('over'); msgs = null; }
 
   // ---------- effects ----------
   let flashes = [], blooms = [];
@@ -559,7 +485,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     lv.mini = m;
   }
   function toTitle() {
-    state = 'title'; paused = false; stT = 0; engineSet(false);
+    state = 'title'; paused = false; stT = 0; audio.engine(false);
     mi = 0; loop = 0; lv = genLevel(0); decorate(lv); p = null; camX = 0;
     bullets = []; ebul = []; bombs = []; parts = []; rings = []; pops = []; flashes = []; blooms = []; msgs = null;
   }
@@ -567,7 +493,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   // ---------- combat ----------
   function damage(e, d) {
     e.hp -= d; e.flash = 0.08;
-    if (e.hp <= 0) killEnemy(e); else sfx.hit();
+    if (e.hp <= 0) killEnemy(e); else audio.sfx('hit');
   }
   function killEnemy(e) {
     if (e.dead) return;
@@ -576,20 +502,20 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     const pts = e.t === 'rocket' && e.fly ? 150 : PTS[e.t];
     addScore(pts); pop(e.x + e.w / 2 - 8, e.y - 6, pts);
     explode(e.x + e.w / 2, e.y + e.h / 2, e.t === 'fuel' ? 40 : 22, e.t === 'fuel');
-    sfx.boom(); shake = Math.max(shake, 0.15);
-    if (e.t === 'fuel') { fuel = Math.min(100, fuel + 25); sfx.fuel(); msg(['FUEL +25'], 1); }
+    audio.sfx('boom'); shake = Math.max(shake, 0.15);
+    if (e.t === 'fuel') { fuel = Math.min(100, fuel + 25); audio.sfx('fuel'); msg(['FUEL +25'], 1); }
     if (e.t === 'hut' && e.spy) { e.spy.state = 'wait'; msg(['AGENT FREED!', 'LAND NEARBY'], 1.8); }
   }
   function hitBrick(k, d) {
     k.hp -= d; k.flash = 0.06;
-    if (k.hp <= 0) { k.dead = true; addScore(10); explode(k.x + 4, k.y + 4, 8, false); sfx.hit(); } else sfx.tink();
+    if (k.hp <= 0) { k.dead = true; addScore(10); explode(k.x + 4, k.y + 4, 8, false); audio.sfx('hit'); } else audio.sfx('tink');
   }
   function killSpy(s) {
     s.state = 'dead'; explode(s.x + 3, s.y + 4, 10, false);
-    score = Math.max(0, score - 200); msg(['AGENT LOST!'], 1.5); sfx.hit();
+    score = Math.max(0, score - 200); msg(['AGENT LOST!'], 1.5); audio.sfx('hit');
   }
   function blast(x, y) {
-    explode(x, y, 26, false); sfx.boom(); shake = Math.max(shake, 0.2);
+    explode(x, y, 26, false); audio.sfx('boom'); shake = Math.max(shake, 0.2);
     for (const e of lv.enemies) {
       if (e.dead) continue;
       const dx = Math.max(e.x - x, 0, x - (e.x + e.w)), dy = Math.max(e.y - y, 0, y - (e.y + e.h));
@@ -601,19 +527,19 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   // ---------- update ----------
   function update(dt) {
     readInput(dt); applyTouch();
-    if (hit('sound')) setSound(!soundOn);
+    if (hit('sound')) audio.setOn(!audio.on);
     T += dt; stT += dt;
     if (state === 'title') { camX += 26 * dt; if (camX > lv.L - W - 10) camX = 0; updateFx(dt); if (hit('start')) newGame(); else if (onExit && hit('quit')) onExit(); return; }
     if (state === 'over') { updateFx(dt); if (stT > 1 && hit('start')) toTitle(); return; }
     if (state === 'clear') {
       updateFx(dt);
       if (demo && stT > 3.5) return nextMission();
-      if (stT > 1 && hit('start')) { mi++; if (mi >= MISSIONS.length) { state = 'win'; stT = 0; saveHi(); sfx.fanfare(); } else startMission(); }
+      if (stT > 1 && hit('start')) { mi++; if (mi >= MISSIONS.length) { state = 'win'; stT = 0; saveHi(); audio.sfx('fanfare'); } else startMission(); }
       return;
     }
     if (state === 'win') { if (stT > 1.5 && hit('start')) { loop++; mi = 0; startMission(); } return; }
     // play
-    if (hit('pause')) { paused = !paused; if (paused) engineSet(false); }
+    if (hit('pause')) { paused = !paused; if (paused) audio.engine(false); }
     if (paused) {
       if (hit('restart')) newGame();
       if (hit('quit')) { saveHi(); toTitle(); }
@@ -635,26 +561,23 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
       jetT -= dt;
       if (jetT <= 0) { jetT = rnd(0.6, 1.4) * lv.M.jets / diff; spawnJet(); }
     }
-    if (engine) {
-      engine.o.frequency.setTargetAtTime(180 + Math.abs(p.vx) * 1.2 + (p.landed ? 0 : 60), AC.currentTime, 0.1);
-      engine.lfo.frequency.setTargetAtTime(p.landed ? 9 : 13 + Math.abs(p.vx) * 0.03, AC.currentTime, 0.1);
-    }
+    audio.throttle(p.vx, p.landed);
   }
 
   function updatePlayer(dt) {
-    if (AC && !engine && fuel > 0) engineSet(true);
+    if (fuel > 0) audio.engine(true);
     if (p.inv > 0) p.inv -= dt;
     if (p.mf > 0) p.mf -= dt;
     p.fireCd -= dt; p.bombCd -= dt;
     if (I.fire && p.fireCd <= 0 && bullets.length < 5) {
-      bullets.push({ x: p.x + 19, y: p.y + 5, vx: 270 + Math.max(0, p.vx) }); p.fireCd = 0.13; p.mf = 0.06; sfx.shoot();
+      bullets.push({ x: p.x + 19, y: p.y + 5, vx: 270 + Math.max(0, p.vx) }); p.fireCd = 0.13; p.mf = 0.06; audio.sfx('shoot');
     }
     if (I.bomb && p.bombCd <= 0 && bombs.length < 2 && !p.landed) {
-      bombs.push({ x: p.x + 9, y: p.y + 9, vx: p.vx * 0.85, vy: 15 + Math.max(0, p.vy) * 0.5 }); p.bombCd = 0.45; sfx.bomb();
+      bombs.push({ x: p.x + 9, y: p.y + 9, vx: p.vx * 0.85, vy: 15 + Math.max(0, p.vy) * 0.5 }); p.bombCd = 0.45; audio.sfx('bomb');
     }
     if (fuel < 20 && fuel > 0) {
       lowFuelT -= dt;
-      if (lowFuelT <= 0) { lowFuelT = 1; sfx.beep(); if (!msgs) msg(['LOW FUEL!'], 0.8); }
+      if (lowFuelT <= 0) { lowFuelT = 1; audio.sfx('beep'); if (!msgs) msg(['LOW FUEL!'], 0.8); }
     }
     if (p.landed) { landed(dt); return; }
     if (fuel > 0) {
@@ -665,7 +588,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
       p.vx = approach(p.vx, tx, 150 * dt);
       p.vy = approach(p.vy, ty, 200 * dt);
       fuel = Math.max(0, fuel - dt * (1 + Math.abs(p.vx) / 250) * (1 + mi * 0.04));
-      if (fuel <= 0) { engineSet(false); msg(['OUT OF FUEL!'], 2); }
+      if (fuel <= 0) { audio.engine(false); msg(['OUT OF FUEL!'], 2); }
     } else {
       p.vy = Math.min(110, p.vy + 95 * dt); p.vx = approach(p.vx, 0, 40 * dt);
     }
@@ -684,7 +607,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     for (let i = 6; i <= 16; i++) { const f = FL(x0 + i); gmin = Math.min(gmin, f); gmax = Math.max(gmax, f); }
     if (p.y + 8 > gmin) {
       if (gmax - gmin <= 2 && p.vy <= SAFE_VY && Math.abs(p.vx) <= SAFE_VX) {
-        p.y = gmin - 8; p.vx = p.vy = 0; p.landed = true; p.landT = 0; stuckT = 0; sfx.land();
+        p.y = gmin - 8; p.vx = p.vy = 0; p.landed = true; p.landT = 0; stuckT = 0; audio.sfx('land');
         p.pad = lv.pads.find(pd => x0 + 6 >= pd.x - 3 && x0 + 16 <= pd.x + pd.w + 3 && Math.abs(pd.y - gmin) < 2) || null;
         return;
       }
@@ -698,7 +621,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     const pd = p.pad;
     if (pd) {
       if (!pd.visited) {
-        pd.visited = true; checkpoint = pd; sfx.jingle();
+        pd.visited = true; checkpoint = pd; audio.sfx('jingle');
         msg(pd.t === 'hq' ? ['HQ REACHED'] : ['OUTPOST REACHED', 'CHECKPOINT + REFUEL'], 2);
       }
       if (fuel < 100) { fuel = Math.min(100, fuel + 40 * dt); }
@@ -708,7 +631,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
           unloadT = 0.4;
           const s = p.aboard.pop();
           s.state = 'walk'; s.x = p.x + 8; s.tx = pd.t === 'hq' ? pd.x + pd.w + 2 : pd.x - 6;
-          addScore(500); pop(p.x + 2, p.y - 8, 500); sfx.saved();
+          addScore(500); pop(p.x + 2, p.y - 8, 500); audio.sfx('saved');
         }
       } else unloadT = 0.3;
       if (pd.t === 'hq' && !p.aboard.length && !lv.spies.some(s => s.state === 'walk' || s.state === 'run')) {
@@ -728,7 +651,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     if (I.up && fuel > 0 && p.landT > 0.15) {
       p.landed = false; p.pad = null; p.vy = -25; p.y -= 1; clearT = 0;
       for (const s of lv.spies) if (s.state === 'run') s.state = 'wait';
-      sfx.lift();
+      audio.sfx('lift');
     }
   }
 
@@ -739,7 +662,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
         s.x += s.dir * Math.min(Math.abs(d), 32 * dt);
         if (Math.abs(d) < 1.5) {
           if (p.alive && p.landed && p.aboard.length < CAP) {
-            s.state = 'aboard'; p.aboard.push(s); addScore(100); sfx.pick(); msg(['AGENT ABOARD'], 1.2);
+            s.state = 'aboard'; p.aboard.push(s); addScore(100); audio.sfx('pick'); msg(['AGENT ABOARD'], 1.2);
           } else s.state = 'wait';
         }
       } else if (s.state === 'walk') {
@@ -797,10 +720,10 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
         case 'rocket':
           if (!e.fly) {
             const d = e.x - pcx;
-            if (p.alive && vis && d < e.trig && d > -20) { e.fly = true; e.vy = -20; sfx.launch(); }
+            if (p.alive && vis && d < e.trig && d > -20) { e.fly = true; e.vy = -20; audio.sfx('launch'); }
           } else {
             e.vy = Math.max(-150, e.vy - 160 * dt); e.y += e.vy * dt;
-            if (lv.hasCeil && e.y < CE(e.x + 2)) { e.dead = true; e.rub = false; explode(e.x + 2, e.y, 14, false); sfx.boom(); }
+            if (lv.hasCeil && e.y < CE(e.x + 2)) { e.dead = true; e.rub = false; explode(e.x + 2, e.y, 14, false); audio.sfx('boom'); }
             else if (e.y < -14) { e.dead = true; e.rub = false; }
             if (Math.random() < 0.8) puff(e.x + 2, e.y + 12, 1.4, 1.1);
           }
@@ -838,7 +761,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
       if (b.y >= fl(b.x + 3) || b.y < CE(b.x + 3)) { b.dead = 1; spark(b.x + 3, b.y); continue; }
       for (const e of ens) if (!e.dead && ov(b.x, b.y, 4, 1, e.x, e.y, e.w, e.h)) {
         b.dead = 1;
-        if (e.t === 'hut') { spark(b.x + 3, b.y); sfx.tink(); } else damage(e, 1);
+        if (e.t === 'hut') { spark(b.x + 3, b.y); audio.sfx('tink'); } else damage(e, 1);
         break;
       }
       if (b.dead) continue;
@@ -1636,7 +1559,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     });
     const a = 0.55 + 0.45 * Math.sin(T * 4);
     g.globalAlpha = a; prompt(tapUI() ? 'TAP TO START' : 'PRESS {start} TO START', cw / 2, 720 * u, 36, '#ffffff', 700, 'center', 8); g.globalAlpha = 1;
-    label('HI ' + pad6(hiscore) + '   ·   SOUND ' + (soundOn ? 'ON' : 'OFF'), cw / 2, 780 * u, 20, 'rgba(255,255,255,0.55)', 600, 'center', 4);
+    label('HI ' + pad6(hiscore) + '   ·   SOUND ' + (audio.on ? 'ON' : 'OFF'), cw / 2, 780 * u, 20, 'rgba(255,255,255,0.55)', 600, 'center', 4);
   }
   function drawClear() {
     const x = panel(760 * u, 420 * u, 300 * u), cx = cw / 2;
@@ -1675,28 +1598,24 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   }
 
   // ---------- main loop ----------
-  let last = performance.now(), acc = 0, raf = 0, stopped = false;
-  function frame(now) {
-    acc += Math.min(0.1, (now - last) / 1000); last = now;
-    while (acc >= DT) { update(DT); acc -= DT; taps.clear(); }
-    render();
-    if (!stopped) raf = requestAnimationFrame(frame);
-  }
+  // taps last one fixed step
+  const ticker = fixedLoop({ dt: DT, step: () => { update(DT); taps.clear(); }, draw: render });
   if (demo) {
     mi = mission % MISSIONS.length; startMission();
     // airborne by the first frame; a still demo shows the mission a few seconds in
     for (let i = 0, n = reducedMotion ? 420 : 75; i < n; i++) update(DT);
   } else toTitle();
-  if (demo && reducedMotion) { render(); listen(window, 'resize', render); }
-  else raf = requestAnimationFrame(frame);
+  if (demo && reducedMotion) ticker.still();
+  else ticker.start();
 
+  let stopped = false;
   function stop() {
     if (stopped) return;
     stopped = true;
-    cancelAnimationFrame(raf);
-    offs.forEach(off => off());
+    ticker.stop();
+    offAll(); unfit();
     input.destroy();
-    if (AC) { AC.close().catch(() => {}); AC = null; engine = null; }
+    audio.destroy();
   }
   return { stop };
 }
