@@ -9,6 +9,7 @@ no external assets. `dist/index.html` is the launcher, a DOS-style menu with liv
 
 | Source           | Game     | In the spirit of       | Compiled                                                   |
 | ---------------- | -------- | ---------------------- | ---------------------------------------------------------- |
+| `games/keepsake` | Keepsake | Popeye (1982)          | `dist/keepsake.html`                                       |
 | `games/brimful`  | Brimful  | Tapper (1983)          | `dist/brimful-cga.html` (CGA), `dist/brimful-hd.html` (HD) |
 | `games/glimmer`  | Glimmer  | Lode Runner (1983)     | `dist/glimmer.html`                                        |
 | `games/quarry`   | Quarry   | Digger (1983)          | `dist/quarry-cga.html` (CGA), `dist/quarry-hd.html` (HD)   |

@@ -1,0 +1,50 @@
+{
+  "title": "Keepsake",
+  "exe": "KEEPSAKE.EXE",
+  "after": "Popeye",
+  "year": 1982,
+  "genre": "Catch-and-chase",
+  "tags": ["Action", "Arcade", "Single-screen"],
+  "blurb": "Wick the lamplighter is sweet on Clementine. Catch the paper hearts, tunes and stars she drops before they sink, while Rumbold the strongman gives chase. Grab the Haymaker and send him flying.",
+  "facts": [
+    ["Scenes", "Harbour, bandstand, rooftops, then faster"],
+    ["Keepsakes", "Paper hearts, notes, stars"],
+    ["Tricks", "Haymaker glove, crate, awning, sandbag"],
+    ["Input", "Keyboard, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "punch": { "keys": ["Space", "KeyZ", "KeyX"], "pad": ["South", "West"], "touch": "PUNCH" },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"] },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"] },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "move": { "keys": ["ArrowsH"], "pad": ["DpadH"], "touch": "Stick" },
+      "climb": { "keys": ["ArrowsV"], "pad": ["DpadV"], "touch": "Stick" },
+      "letters": { "keys": ["Arrows"], "pad": ["Dpad"] }
+    }
+  },
+  "controls": [
+    ["move", "Walk, wrap round the edges"],
+    ["climb", "Take the stairs, bounce"],
+    ["punch", "Punch pots, birds, crates"],
+    ["pause", "Pause"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · 16:9 · vector",
+      "note": "Illustrated vector scenes, dusk harbour to moonlit roofs. Saves scores and a checkpoint."
+    }
+  ]
+}
