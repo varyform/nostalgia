@@ -607,8 +607,9 @@ function bendPole(from: Vec3, bend: 1 | -1, swivel: number, hinge: Vec3): void {
   pole.x = (hinge.y * axis.z - hinge.z * axis.y) * bend;
   pole.y = (hinge.z * axis.x - hinge.x * axis.z) * bend;
   pole.z = (hinge.x * axis.y - hinge.y * axis.x) * bend;
-  // A limb along the hinge has no bend plane: fall back to forward/down.
-  if (Exact.hypot(pole.x, pole.y, pole.z) < 0.15) {
+  // A limb along the hinge has no bend plane: fall back to forward/down. Only right on it:
+  // falling back any sooner would jump the knee or elbow wherever the fallback begins.
+  if (Exact.hypot(pole.x, pole.y, pole.z) < 1e-6) {
     pole.x = bend > 0 ? 1 : 0;
     pole.y = bend > 0 ? 0 : -1;
     pole.z = 0;
