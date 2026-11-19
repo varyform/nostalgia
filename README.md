@@ -14,9 +14,11 @@ no external assets. `dist/index.html` is the launcher, a DOS-style menu with liv
 | `games/glimmer`  | Glimmer  | Lode Runner (1983)     | `dist/glimmer.html`                                        |
 | `games/quarry`   | Quarry   | Digger (1983)          | `dist/quarry-cga.html` (CGA), `dist/quarry-hd.html` (HD)   |
 | `games/dewdrop`  | Dewdrop  | Nuts & Milk (1984)     | `dist/dewdrop.html`                                        |
+| `games/polder`   | Polder   | Xonix (1984)           | `dist/polder.html`                                         |
 | `games/skyhook`  | Skyhook  | Striker (1985)         | `dist/skyhook-cga.html` (CGA), `dist/skyhook-hd.html` (HD) |
 | `games/spindle`  | Spindle  | Nebulus (1987)         | `dist/spindle.html`                                        |
 | `games/dropzone` | Dropzone | Airborne Ranger (1988) | `dist/dropzone.html`                                       |
+| `games/contrail` | Contrail | F29 Retaliator (1989)  | `dist/contrail.html`                                       |
 | `games/barrage`  | Barrage  | Scorched Earth (1991)  | `dist/barrage.html`                                        |
 | `games/triform`  | Triform  | Metal Mutant (1991)    | `dist/triform-vga.html` (VGA), `dist/triform-hd.html` (HD) |
 | `games/quintet`  | Quintet  | Color Lines (1992)     | `dist/quintet.html`                                        |
