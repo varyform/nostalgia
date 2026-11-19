@@ -46,8 +46,12 @@ export const sideOf = (limb: LimbName): 1 | -1 => (limb.endsWith("Near") ? 1 : -
  * are authored exactly like side-on ones.
  */
 export interface Pose {
-  /** Pelvis position relative to the root. */
-  pelvis: Vec2;
+  /**
+   * Pelvis position relative to the root: forward, up, and (z, 0 if left
+   * out) sideways toward the near side. The feet keep their places as it
+   * moves; the hips go with it.
+   */
+  pelvis: Target;
   /** Angle of the lower spine from vertical, radians; positive leans toward facing. */
   lean: number;
   /** Extra head tilt on top of the spine's angle. */
@@ -204,10 +208,17 @@ function lerpRecord<K extends string>(
   return out;
 }
 
+/** The pelvis `t` of the way from `a` to `b`; sideways only where either is off to a side. */
+export function lerpPelvis(a: Target, b: Target, t: number): Target {
+  const out: Target = { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) };
+  if (a.z || b.z) out.z = lerp(a.z ?? 0, b.z ?? 0, t);
+  return out;
+}
+
 /** Plain lerp, yaw included: blending 0 → 2π is a full spin. */
 export function lerpPose(a: Pose, b: Pose, t: number): Pose {
   return {
-    pelvis: { x: lerp(a.pelvis.x, b.pelvis.x, t), y: lerp(a.pelvis.y, b.pelvis.y, t) },
+    pelvis: lerpPelvis(a.pelvis, b.pelvis, t),
     lean: lerp(a.lean, b.lean, t),
     headTilt: lerp(a.headTilt, b.headTilt, t),
     handNear: swingTarget(a.handNear, b.handNear, t, SHOULDER, SHOULDER),
@@ -262,7 +273,7 @@ export function lerpTarget(a: Pose, b: Pose, limb: LimbName, t: number): Target 
 export function lerpPoseLead(a: Pose, b: Pose, t: number, lag = LEAD_LAG): Pose {
   const core = leadTime(true, t, lag);
   const limbs = lerpPose(a, b, leadTime(false, t, lag));
-  limbs.pelvis = { x: lerp(a.pelvis.x, b.pelvis.x, core), y: lerp(a.pelvis.y, b.pelvis.y, core) };
+  limbs.pelvis = lerpPelvis(a.pelvis, b.pelvis, core);
   limbs.lean = lerp(a.lean, b.lean, core);
   limbs.bend = lerp(a.bend ?? 0, b.bend ?? 0, core);
   limbs.yaw = lerp(a.yaw ?? 0, b.yaw ?? 0, core);
@@ -309,7 +320,7 @@ function layOutSpine(pose: Pose, props: Proportions): void {
   const upper = pose.lean + bend;
   pelvis.x = pose.pelvis.x;
   pelvis.y = pose.pelvis.y;
-  pelvis.z = 0;
+  pelvis.z = pose.pelvis.z ?? 0;
   step(pose.lean, props.spineLower / 2, pelvis, belly);
   step(pose.lean + bend / 3, props.spineLower / 2, belly, waist);
   step(pose.lean + (bend * 2) / 3, props.spineUpper / 2, waist, ribs);
@@ -332,7 +343,7 @@ function limbRoot(limb: LimbName, props: Proportions, into: Vec3): void {
   } else {
     into.x = pelvis.x;
     into.y = pelvis.y;
-    into.z = (s * props.hipWidth) / 2;
+    into.z = pelvis.z + (s * props.hipWidth) / 2;
   }
 }
 
@@ -428,12 +439,15 @@ export function targetFromWorld(
   return { x: body.x, y: body.y, z: body.z - (sideOf(limb) * props.hipWidth) / 2 };
 }
 
-/** The pelvis position that puts the pelvis at a world point (as far as the turned body allows: z is dropped). */
-export function pelvisFromWorld(pose: Pose, point: Vec3, at: Placement = ORIGIN): Vec2 {
+/** The pelvis position that puts the pelvis at a world point. */
+export function pelvisFromWorld(pose: Pose, point: Vec3, at: Placement = ORIGIN): Target {
   // The body pitches about the pelvis, so only the yaw moves it.
   const yaw = pose.yaw ?? 0;
   const a = (point.x - at.x) * at.facing;
-  return { x: a * Exact.cos(yaw) + point.z * Exact.sin(yaw), y: point.y - at.y };
+  const cy = Exact.cos(yaw);
+  const sy = Exact.sin(yaw);
+  const z = -a * sy + point.z * cy;
+  return { x: a * cy + point.z * sy, y: point.y - at.y, ...(Math.abs(z) > 1e-9 ? { z } : {}) };
 }
 
 // --- solving --------------------------------------------------------------

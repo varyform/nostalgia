@@ -7,6 +7,7 @@ import {
   leadTime,
   LIMBS,
   lerpPose,
+  lerpPelvis,
   lerpPoseLead,
   lerpTarget,
   REST_POSE,
@@ -315,7 +316,7 @@ function blendChannel(out: Pose, a: Pose, b: Pose, t: number, kind: Easing, c: n
   const e = kind === "lead" ? leadTime(CORE.has(ch), t) : ease(kind, t);
   const o = out as unknown as Record<string, unknown>;
   if (ch === "pelvis") {
-    o.pelvis = { x: lerp(a.pelvis.x, b.pelvis.x, e), y: lerp(a.pelvis.y, b.pelvis.y, e) };
+    o.pelvis = lerpPelvis(a.pelvis, b.pelvis, e);
   } else if (!split && (LIMBS as readonly string[]).includes(ch)) {
     o[ch] = lerpTarget(a, b, ch as LimbName, e);
   } else {

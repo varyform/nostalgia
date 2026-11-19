@@ -33,9 +33,11 @@ import {
  * 5. Keys can put a channel on a curve of its own (`curves`, the graph
  *    editor's). Nothing changes shape, but an older reader would play
  *    such a move wrong, so it refuses it as newer instead.
+ * 6. The pelvis can move sideways (`pelvis.z`), so a move can spin and
+ *    drift at once. Refused by older readers for the same reason.
  */
 export const FORMAT = "rig-editor";
-export const VERSION = 5;
+export const VERSION = 6;
 
 export interface Project {
   format: typeof FORMAT;
@@ -122,6 +124,10 @@ const MIGRATIONS: Record<number, (file: Raw) => Raw> = {
   4(file) {
     // Curves are new; nothing to change.
     return { ...file, version: 5 };
+  },
+  5(file) {
+    // The pelvis's z is new: 0 where it's left out.
+    return { ...file, version: 6 };
   },
 };
 
@@ -241,7 +247,11 @@ function readPose(raw: unknown): Partial<Pose> {
   if (!isObject(raw)) return {};
   const pose: Partial<Pose> = {};
   for (const k of NUMBERS) if (typeof raw[k] === "number") pose[k] = num(raw[k], 0);
-  if (isObject(raw.pelvis)) pose.pelvis = { x: num(raw.pelvis.x, 0), y: num(raw.pelvis.y, 0) };
+  if (isObject(raw.pelvis)) {
+    pose.pelvis = { x: num(raw.pelvis.x, 0), y: num(raw.pelvis.y, 0) };
+    const z = num(raw.pelvis.z, 0);
+    if (z) pose.pelvis.z = z;
+  }
   for (const limb of LIMBS) {
     const t = raw[limb];
     if (!isObject(t)) continue;
