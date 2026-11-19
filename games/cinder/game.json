@@ -1,0 +1,58 @@
+{
+  "title": "Cinder",
+  "exe": "CINDER.EXE",
+  "after": "Karateka",
+  "year": 1984,
+  "genre": "Martial arts",
+  "tags": ["Fighting", "Action", "Side view"],
+  "blurb": "Wren, a lantern-runner from the valley, climbs at dusk to the Cinder Keep, where the Ash Regent holds her teacher. Unarmed, she meets his masked guards one at a time: run between them, square up before they strike, and never turn your back.",
+  "facts": [
+    ["Scenes", "7, from the mountain path to the dawn garden"],
+    ["Fighting", "Punches, kicks, blocks and ducks at three heights"],
+    ["Foes", "Footmen, brawlers, adepts and the Ash Regent"],
+    ["Input", "Keyboard, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "punch": { "keys": ["KeyZ"], "pad": ["West"], "touch": "PUNCH" },
+      "kick": { "keys": ["KeyX"], "pad": ["South"], "touch": "KICK" },
+      "stance": { "keys": ["Space", "KeyC"], "pad": ["R1"], "touch": "STANCE" },
+      "bow": { "keys": ["KeyB"], "pad": ["North"], "touch": "BOW" },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"], "touch": "II" },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"] },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "walk": { "keys": ["ArrowsH"], "pad": ["DpadH"], "touch": "Stick" },
+      "aim": { "keys": ["ArrowsV"], "pad": ["DpadV"] },
+      "high": { "keys": ["ArrowUp"], "pad": ["Up"] },
+      "low": { "keys": ["ArrowDown"], "pad": ["Down"] },
+      "menu": { "keys": ["ArrowsV"], "pad": ["DpadV"] },
+      "letters": { "keys": ["Arrows"], "pad": ["Dpad"] }
+    }
+  },
+  "controls": [
+    ["walk", "Walk; away from a foe blocks"],
+    ["stance", "Run or fight stance"],
+    ["punch", "Punch (up: high, down: low)"],
+    ["kick", "Kick (up: high, down: low)"],
+    ["aim", "Down ducks; down + away blocks low"],
+    ["bow", "Bow, in run stance"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · 16:9 · vector",
+      "note": "Painted dusk-to-dawn backdrops of a mountain keep, drifting embers and ash, lantern light and long shadows. High scores are saved in the browser."
+    }
+  ]
+}
