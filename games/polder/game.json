@@ -1,0 +1,48 @@
+{
+  "title": "Polder",
+  "exe": "POLDER.EXE",
+  "after": "Xonix",
+  "year": 1984,
+  "genre": "Territory cutter",
+  "tags": ["Action", "Arcade", "Single-screen"],
+  "blurb": "Maren the dyke-warden skims the tidal flats, staking new dykes across the water. Close one and every stretch with no jellyfish in it drains to meadow. Jellies break unfinished dykes, crabs patrol the old ones, and the undertow gives chase.",
+  "facts": [
+    ["Flats", "Twelve stages, dawn to high water at night"],
+    ["Hazards", "Jellies, sea nettles, shore crabs, the undertow"],
+    ["Extras", "Pearls, calming conches, a tide clock, autosave"],
+    ["Input", "Keyboard, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"], "touch": "II" },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"] },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "steer": { "keys": ["Arrows"], "pad": ["Dpad"], "touch": "Drag" },
+      "letters": { "keys": ["Arrows"], "pad": ["Dpad"] }
+    }
+  },
+  "controls": [
+    ["steer", "Steer the skimmer"],
+    ["start", "Start, go on"],
+    ["pause", "Pause"],
+    ["sound", "Sound on/off"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · 16:9 · vector",
+      "note": "Lit vector flats from dawn to moonlight, landscape or portrait. Saves scores and a checkpoint."
+    }
+  ]
+}
