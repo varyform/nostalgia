@@ -104,6 +104,11 @@ export interface Voices {
    * the context when first played into, and feeds `to` (default 'music').
    */
   insert: <F extends Fx>(build: FxBuilder<F>, to?: Target) => Insert<F>;
+  /**
+   * The noise buffer looping on the current context, started now from `offset` seconds in
+   * (layers taken from different points don't move together); null before unlock().
+   */
+  noiseSource: (offset?: number) => AudioBufferSourceNode | null;
   /** A continuous sound kept on the current context (see Loop); build() makes its graph. */
   loop: <L extends { stop(): void }>(build: (ac: AudioContext) => L) => Loop<L>;
   /** Keep the music quiet until context time `until` (a jingle has the floor); it then resumes. */
@@ -329,6 +334,14 @@ export function createSynth<T extends Track, M extends object = object>(opts: Sy
     };
     return ins;
   }
+  function noiseSource(offset = 0) {
+    if (!ac || !noise) return null;
+    const s = ac.createBufferSource();
+    s.buffer = noise;
+    s.loop = true;
+    s.start(ac.currentTime, offset);
+    return s;
+  }
   function loop<L extends { stop(): void }>(build: (ac: AudioContext) => L): Loop<L> {
     let want = false,
       made: { ac: AudioContext; it: L } | null = null;
@@ -501,6 +514,7 @@ export function createSynth<T extends Track, M extends object = object>(opts: Sy
     pulse: pulseVoice,
     notes,
     insert,
+    noiseSource,
     loop,
     hold,
   };
@@ -533,7 +547,8 @@ export function createSynth<T extends Track, M extends object = object>(opts: Sy
 
   function destroy() {
     clearInterval(timer);
-    if (ac) void ac.close().catch(() => {});
+    // an OfflineAudioContext (render harnesses) has no close()
+    if (ac && typeof ac.close === 'function') void ac.close().catch(() => {});
     ac = null;
   }
 

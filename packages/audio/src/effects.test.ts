@@ -6,6 +6,8 @@ import {
   delay,
   distortion,
   limiter,
+  softclip,
+  softCurve,
   type SynthOptions,
   type Voices,
 } from './index.ts';
@@ -206,5 +208,52 @@ describe('loops', () => {
     expect(l.on()).toBeNull();
     audio.unlock();
     expect(l.live).not.toBeNull();
+  });
+});
+
+describe('softclip', () => {
+  it('a tanh curve, full scale in → full scale out, made once per drive', () => {
+    const ac = new AudioContext();
+    const fx = softclip(ac, { drive: 1.6 });
+    expect(fx.input).toBe(fx.output);
+    const c = softCurve(1.6);
+    expect(c[0]).toBeCloseTo(-1);
+    expect(c[2047]).toBeCloseTo(1);
+    expect(c[1536]).toBeCloseTo(Math.tanh(1.6 * (3072 / 2047 - 1)) / Math.tanh(1.6), 6);
+    expect(softCurve(1.601)).toBe(c);
+  });
+});
+
+describe('noise sources', () => {
+  it('the noise buffer looping on the current context, from an offset; none before unlock()', () => {
+    const audio = createSynth({
+      seed: 1,
+      levels: { master: 1, music: 1, sfx: 1 },
+      noiseLength: 2,
+      arrange: v => ({ effects: {}, methods: { v } }),
+    });
+    expect(audio.v.noiseSource(0.3)).toBeNull();
+    audio.unlock();
+    rec.time = 1;
+    const s = audio.v.noiseSource(0.3)!;
+    expect(s.loop).toBe(true);
+    expect(rec.log).toContain(`${id(s)}.start(1,0.3)`);
+  });
+});
+
+describe('destroy', () => {
+  it('copes with a context that has no close() (an OfflineAudioContext in a render harness)', () => {
+    const audio = createSynth({ seed: 1, levels: { master: 1, music: 1, sfx: 1 }, arrange: () => ({ effects: {} }) });
+    audio.unlock();
+    const ctx = rec.log.find(l => l.includes('=AudioContext('))?.split('=')[0];
+    const proto = Object.getPrototypeOf(new AudioContext()) as { close?: unknown };
+    const close = proto.close;
+    delete proto.close;
+    try {
+      expect(() => audio.destroy()).not.toThrow();
+    } finally {
+      proto.close = close;
+    }
+    expect(rec.log).not.toContain(`${ctx}.close()`);
   });
 });

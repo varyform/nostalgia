@@ -28,15 +28,6 @@ function loops(v) {
   const engine = v.loop(buildEngine),
     cue = v.loop(buildCue);
 
-  // noise for the engine: the synth's seeded buffer, looped from different points so the layers
-  // don't move together
-  const noise = (ac, offset) => {
-    const s = ac.createBufferSource();
-    s.buffer = v.noise;
-    s.loop = true;
-    s.start(ac.currentTime, offset);
-    return s;
-  };
   const filter = (ac, type, f, q) => {
     const b = ac.createBiquadFilter();
     b.type = type;
@@ -78,7 +69,7 @@ function loops(v) {
       [0.13, -0.45],
       [0.71, 0.45],
     ]) {
-      const s = noise(ac, offset),
+      const s = v.noiseSource(offset), // looped from different points so the layers don't move together
         p = ac.createStereoPanner();
       p.pan.value = side;
       s.connect(p).connect(air);

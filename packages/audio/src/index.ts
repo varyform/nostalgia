@@ -56,12 +56,14 @@
  *   distortion(ac, { amount, shape, ceiling, mix, gain })      a hard clipper (shape 0) or a wavefolder
  *   compressor(ac, { threshold, ratio, knee, attack, release, makeup })   RMS, soft knee; makeup 'auto'
  *   limiter(ac, { ceiling = -1, release = 0.1 })   a peak limiter for master: only turns down, no makeup
+ *   softclip(ac, { drive = 1.6 })   tanh: rounds peaks (softCurve(drive) for a WaveShaper of your own)
  * Voices play into them through v.insert(ac => fx or [fx, …], to = 'music'), passed as their
  * bus; a whole bus through the synth's `inserts: { music, sfx, master }`. A track's `gain` is its
  * level after the music bus's inserts.
  *
  * Continuous sounds (an engine, a rotor, an alarm): v.loop(ac => graph with stop()) → on() / off()
- * / live, kept on the current context and rebuilt on a new one after destroy() + unlock().
+ * / live, kept on the current context and rebuilt on a new one after destroy() + unlock();
+ * v.noiseSource(offset) gives such a graph a looping, started noise layer.
  *
  * An attack of 0 starts a voice at its peak and only decays: a pluck, a blip.
  *
@@ -97,6 +99,8 @@ export {
   delay,
   distortion,
   limiter,
+  softclip,
+  softCurve,
   type CompressorFx,
   type CompressorOptions,
   type DelayFx,

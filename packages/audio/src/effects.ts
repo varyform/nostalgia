@@ -386,3 +386,29 @@ export function limiter(ac: BaseAudioContext, o: LimiterOptions = {}): Compresso
   );
   return { input, output, ready };
 }
+
+// ---------- soft clip ----------
+const softCurves = new Map<number, Float32Array<ArrayBuffer>>();
+/** tanh(drive·x) normalised to ±1 at the ends; cached per drive (to 1/100). */
+export function softCurve(drive: number): Float32Array<ArrayBuffer> {
+  const key = Math.round(drive * 100) / 100;
+  let c = softCurves.get(key);
+  if (!c) {
+    const d = Math.max(key, 0.01),
+      norm = Math.tanh(d);
+    c = Float32Array.from({ length: 2048 }, (_, k) => Math.tanh(d * ((2 * k) / 2047 - 1)) / norm);
+    softCurves.set(key, c);
+  }
+  return c;
+}
+
+/**
+ * A soft clipper: tanh, rounding peaks instead of cutting them (grit on a noise layer, warmth
+ * on a bass). `drive` sets how early it bends (1.6: gently; 5: nearly a square); full scale in
+ * stays full scale out.
+ */
+export function softclip(ac: BaseAudioContext, { drive = 1.6 }: { drive?: number } = {}): Fx {
+  const ws = ac.createWaveShaper();
+  ws.curve = softCurve(drive);
+  return { input: ws, output: ws };
+}
