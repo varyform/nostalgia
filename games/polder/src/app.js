@@ -4,7 +4,7 @@
 // never draws: the renderer (hd/render.js) reads this `app` object every frame and answers
 // hit tests. On an upright phone the field is drawn turned a quarter, so the arrows (and the
 // stick) are turned with it before they reach the sim.
-import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
+import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave, savedAgo } from '@nostalgia/save';
 import meta from '../game.json';
@@ -72,7 +72,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', () => { if (app.state !== 'initials') toggleFullscreen(); }); // from the key event itself
     listen(cv, 'dblclick', () => toggleFullscreen());
-    listen(window, 'blur', () => { if (app.state === 'play') { app.pmenu = 0; setState('pause'); } });
+    onAway(listen, () => { if (app.state === 'play') { app.pmenu = 0; setState('pause'); } });
     listen(window, 'keydown', e => {
       if (app.state !== 'initials' || !/^Key[A-Z]$/.test(e.code)) return;
       const E = app.entry;

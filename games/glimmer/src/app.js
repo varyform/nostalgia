@@ -2,7 +2,7 @@
 // pause, level clear, game over and continue, ending, editor), the attract-mode demo, sound,
 // touch controls, the saved progress and the autosave behind the title's CONTINUE. It never draws: the renderer (hd/render.js) reads
 // this `app` object every frame.
-import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
+import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave } from '@nostalgia/save';
 import meta from '../game.json';
@@ -74,7 +74,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', toggleFullscreen); // from the key event itself, as browsers require
     listen(cv, 'dblclick', () => { if (app.state !== 'editor') toggleFullscreen(); });
-    listen(window, 'blur', () => { if (app.state === 'play') setState('pause'); });
+    onAway(listen, () => { if (app.state === 'play') setState('pause'); });
     app.touch = createTouch(cv, { listen });
     app.editor = createEditor(app, { listen, cv, save: () => store() });
   }

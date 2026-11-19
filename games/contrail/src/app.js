@@ -3,7 +3,7 @@
 // score, airframes), the autosave checkpoint behind CONTINUE, the attract-mode demo, sound and
 // touch. It never draws: the renderer (hd/render.js) reads this `app` object every frame and
 // answers touch hit tests.
-import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
+import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave, savedAgo } from '@nostalgia/save';
 import meta from '../game.json';
@@ -77,7 +77,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', () => toggleFullscreen());
     listen(cv, 'dblclick', () => toggleFullscreen());
-    listen(window, 'blur', () => { if (app.state === 'play') setState('pause'); });
+    onAway(listen, () => { if (app.state === 'play') setState('pause'); });
     app.touch = createTouch(cv, { listen, view });
   }
 

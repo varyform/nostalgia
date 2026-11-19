@@ -3,7 +3,7 @@
 // boot(canvas, { demo: true, pilot }) is attract mode (?demo=on, the launcher's preview): the
 // same simulation and renderer with no DOM besides the canvas, no listeners, no audio, no
 // storage, and the autopilot (autopilot.js) at the controls. onExit returns to the launcher.
-import { listeners, storage } from '@nostalgia/game/runtime';
+import { listeners, onAway, storage } from '@nostalgia/game/runtime';
 import { createInput, menuNav, glyphHTML } from '@nostalgia/input';
 import { createAutosave, savedAgo } from '@nostalgia/save';
 import meta from '../game.json';
@@ -485,7 +485,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     listen(window,'mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;});
     listen(cv,'mousedown',()=>audio.unlock());
     listen(cv,'contextmenu',e=>e.preventDefault());
-    listen(window,'blur',()=>{if(inPlay()&&!G.paused)setPaused(true);});
+    onAway(listen, ()=>{if(inPlay()&&!G.paused)setPaused(true);});
     input.on('mute',()=>{audio.setOn(!audio.on);toast(audio.on?'Sound on':'Sound off');});
     // pad Start outside play goes forward: the focused operation card or the screen's primary button (Start, Start deploys)
     input.on('pause',()=>{if(inPlay())setPaused(!G.paused);else if(padAim()){const f=menuFocus(),el=f&&f.classList.contains('mcard')?f:menuDefault();if(el)el.click();}});
@@ -1428,7 +1428,13 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     update(dt);render();
   }
   let last=performance.now(),raf=0,stopped=false;
-  function frame(now){if(stopped)return;const dt=Math.min(0.05,(now-last)/1000);last=now;try{tick(dt);}catch(e){console.error(e);}raf=requestAnimationFrame(frame);}
+  const hiddenTab=()=>document.visibilityState==='hidden';
+  function frame(now){raf=0;if(stopped)return;const dt=Math.min(0.05,(now-last)/1000);last=now;try{tick(dt);}catch(e){console.error(e);}if(!hiddenTab())raf=requestAnimationFrame(frame);}
+  // a hidden tab runs nothing (asks for no frames); shown again, on from where it was
+  listen(document,'visibilitychange',()=>{
+    if(hiddenTab()){cancelAnimationFrame(raf);raf=0;}
+    else if(!stopped&&!raf&&!(reducedMotion&&!dom)){last=performance.now();raf=requestAnimationFrame(frame);}
+  });
 
   /* ---------- attract mode ---------- */
   // a run starts on the plane's approach to the flak line (or, for a still, on the ground near the objective)

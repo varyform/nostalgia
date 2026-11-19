@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
-import { canvasPoint, fitPixels, fitWide, fixedLoop, listeners, storage, toggleFullscreen } from './runtime.ts';
+import { canvasPoint, fitPixels, fitWide, fixedLoop, listeners, onAway, storage, toggleFullscreen } from './runtime.ts';
 
 type Win = EventTarget & { innerWidth: number; innerHeight: number; devicePixelRatio: number };
 let win: Win, doc: EventTarget;
@@ -79,6 +79,27 @@ describe('fixedLoop', () => {
     expect(draw).toHaveBeenCalledTimes(1);
   });
 
+  it('asks for no frames while the tab is hidden, and goes on without catching up when shown', () => {
+    const step = vi.fn(),
+      draw = vi.fn();
+    const loop = fixedLoop({ dt: 0.01, step, draw });
+    loop.start();
+    frame(20);
+    expect(step).toHaveBeenCalledTimes(2);
+    Object.assign(doc, { visibilityState: 'hidden' });
+    doc.dispatchEvent(new Event('visibilitychange'));
+    expect(frames.size).toBe(0);
+    now += 60_000; // a minute away
+    Object.assign(doc, { visibilityState: 'visible' });
+    doc.dispatchEvent(new Event('visibilitychange'));
+    expect(frames.size).toBe(1);
+    frame(10);
+    expect(step).toHaveBeenCalledTimes(3); // one step for the 10 ms, none for the minute
+    loop.stop();
+    doc.dispatchEvent(new Event('visibilitychange'));
+    expect(frames.size).toBe(0); // stopped stays stopped
+  });
+
   it('a still frame is drawn once and again on resize, until stopped', () => {
     const draw = vi.fn();
     const loop = fixedLoop({ dt: 0.01, step: () => {}, draw });
@@ -90,6 +111,24 @@ describe('fixedLoop', () => {
     loop.stop();
     resize(900, 600);
     expect(draw).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('onAway', () => {
+  it('fires on blur, pagehide and the tab going hidden (not shown), and comes off with offAll', () => {
+    const fn = vi.fn();
+    const { listen, offAll } = listeners();
+    onAway(listen, fn);
+    win.dispatchEvent(new Event('blur'));
+    win.dispatchEvent(new Event('pagehide'));
+    Object.assign(doc, { visibilityState: 'hidden' });
+    doc.dispatchEvent(new Event('visibilitychange'));
+    Object.assign(doc, { visibilityState: 'visible' });
+    doc.dispatchEvent(new Event('visibilitychange'));
+    expect(fn).toHaveBeenCalledTimes(3);
+    offAll();
+    win.dispatchEvent(new Event('blur'));
+    expect(fn).toHaveBeenCalledTimes(3);
   });
 });
 

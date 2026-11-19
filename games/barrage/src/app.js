@@ -3,7 +3,7 @@
 // the attract run behind the title and the demo, sound, pointer, the saved setup and records,
 // and the autosave behind the title's CONTINUE.
 // It never draws: the renderer reads this `app` object every frame and answers hit tests.
-import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
+import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave } from '@nostalgia/save';
 import meta from '../game.json';
@@ -233,7 +233,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'pointerdown', unlock);
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', () => { if (!editingName()) toggleFullscreen(); });
-    listen(window, 'blur', () => { if (app.state === 'play') { app.pauseMenu = 0; setState('pause'); } });
+    onAway(listen, () => { if (app.state === 'play') { app.pauseMenu = 0; setState('pause'); } });
     // typed names on the setup screen
     listen(window, 'keydown', e => {
       if (!editingName() || e.ctrlKey || e.metaKey || e.altKey) return;

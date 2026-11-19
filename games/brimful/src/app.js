@@ -2,7 +2,7 @@
 // pause, screen clear, Order Up! bonus, game over, initials), the attract-mode demo, sound,
 // touch, the saved high-score table and the autosave behind the title's CONTINUE. It never draws: a renderer (cga/ or hd/) reads this
 // `app` object every frame and answers touch hit tests.
-import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
+import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave } from '@nostalgia/save';
 import meta from '../game.json';
@@ -67,7 +67,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', () => { if (app.state !== 'initials') toggleFullscreen(); }); // from the key event itself, as browsers require
     listen(cv, 'dblclick', toggleFullscreen);
-    listen(window, 'blur', () => { if (app.state === 'play' || app.state === 'bonus') setState('pause'); });
+    onAway(listen, () => { if (app.state === 'play' || app.state === 'bonus') setState('pause'); });
     // typed initials
     listen(window, 'keydown', e => {
       if (app.state !== 'initials' || !/^Key[A-Z]$/.test(e.code)) return;

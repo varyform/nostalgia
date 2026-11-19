@@ -38,7 +38,7 @@
 //
 // The renderer's hit(x, y, app) answers taps outside the flight: { act: 'menu', i } (an entry of
 // the current menu), { act: 'back' }, { act: 'locked' } (a locked mission), or { act: 'tap' }.
-import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
+import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave, savedAgo } from '@nostalgia/save';
 import meta from '../game.json';
@@ -116,7 +116,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', () => toggleFullscreen());
     listen(cv, 'dblclick', () => toggleFullscreen());
-    listen(window, 'blur', () => { if (app.state === 'play') setState('pause'); });
+    onAway(listen, () => { if (app.state === 'play') setState('pause'); });
     app.touch = createTouch(cv, { listen, view });
   }
 

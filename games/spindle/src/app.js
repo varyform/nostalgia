@@ -2,7 +2,7 @@
 // pause, game over, initials for the score table), the attract-mode demo, sound, touch, the
 // saved scores and the autosave behind the title's CONTINUE. It never draws: the renderer (hd/render.js) reads this `app` object every
 // frame and implements { draw(app), events(list, sim), destroy() }, plus menuAt() for taps.
-import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
+import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave } from '@nostalgia/save';
 import meta from '../game.json';
@@ -78,7 +78,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', () => { if (app.state !== 'entry') toggleFullscreen(); }); // from the key event itself
     listen(cv, 'dblclick', () => toggleFullscreen());
-    listen(window, 'blur', () => { if (app.state === 'play') setState('pause'); });
+    onAway(listen, () => { if (app.state === 'play') setState('pause'); });
     // initials can be typed straight in
     listen(window, 'keydown', e => {
       if (app.state !== 'entry' || !/^Key[A-Z]$/.test(e.code)) return;

@@ -254,6 +254,11 @@ export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder 
       this.state = 'running';
       return Promise.resolve();
     }
+    suspend() {
+      call('#' + this.id, 'suspend', []);
+      this.state = 'suspended';
+      return Promise.resolve();
+    }
     close() {
       call('#' + this.id, 'close', []);
       this.state = 'closed';

@@ -2,13 +2,15 @@
  * The page plumbing every game repeats: listeners that come off together, the fixed-step
  * loop, fitting the canvas to the window, saved data, full screen, touch points.
  *
- *   import { canvasPoint, fitPixels, fitWide, fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
+ *   import { canvasPoint, fitPixels, fitWide, fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
  *
  *   const { listen, offAll } = listeners();
- *   listen(window, 'blur', pause);                          // offAll() removes every one
+ *   listen(window, 'keydown', onKey);                       // offAll() removes every one
+ *   onAway(listen, () => { if (app.state === 'play') setState('pause'); });   // blur, hidden tab, pagehide
  *
  *   const loop = fixedLoop({ dt: 1 / 60, step: update, draw: () => view.draw(app) });
  *   reducedMotion ? loop.still() : loop.start();           // still: one frame, redrawn on resize
+ *                                                          // (neither steps nor draws while the tab is hidden)
  *   loop.stop();
  *
  *   const unfit = fitWide(cv, { onFit: (w, h) => rebuildCaches(w, h) });   // HD: 16:9 at device pixels
@@ -47,8 +49,25 @@ export function listeners(): {
   };
 }
 
+/**
+ * fn() when the player is away from the game: the window loses focus, the tab or app is hidden
+ * (switching tabs, minimising, the iOS app going to the background — where blur alone may not
+ * come), or the page is being left. The place to open the pause screen; listen's offAll()
+ * removes it too.
+ */
+export function onAway(listen: ReturnType<typeof listeners>['listen'], fn: () => void): void {
+  listen(window, 'blur', fn);
+  listen(window, 'pagehide', fn);
+  listen(document, 'visibilitychange', () => {
+    if (document.visibilityState === 'hidden') fn();
+  });
+}
+
 export interface FixedLoop {
-  /** Run on requestAnimationFrame: as many fixed steps as the time since the last frame holds, then draw. */
+  /**
+   * Run on requestAnimationFrame: as many fixed steps as the time since the last frame holds,
+   * then draw. Nothing runs while the tab is hidden; it picks up from where it was when shown.
+   */
   start(): void;
   /** Draw one frame, and again on every resize (a still demo, for reduced motion). */
   still(): void;
@@ -64,9 +83,12 @@ export function fixedLoop({ dt, step, draw }: { dt: number; step: () => void; dr
   let last = 0,
     acc = 0,
     raf = 0,
+    running = false,
     stopped = false;
   const redraw = () => draw();
+  const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
   function frame(now: number) {
+    raf = 0;
     acc += Math.min(0.1, (now - last) / 1000);
     last = now;
     while (acc >= dt) {
@@ -74,12 +96,25 @@ export function fixedLoop({ dt, step, draw }: { dt: number; step: () => void; dr
       acc -= dt;
     }
     draw();
-    if (!stopped) raf = requestAnimationFrame(frame);
+    if (!stopped && !hidden()) raf = requestAnimationFrame(frame);
+  }
+  function resume() {
+    if (stopped || raf || hidden()) return;
+    last = performance.now(); // no catching up on the time away
+    raf = requestAnimationFrame(frame);
+  }
+  // hidden: no more frames are asked for (the browser mostly stops them anyway, not always at
+  // once and not in every web view); shown again: on from where it was
+  function visibility() {
+    if (!hidden()) return resume();
+    cancelAnimationFrame(raf);
+    raf = 0;
   }
   return {
     start() {
-      last = performance.now();
-      raf = requestAnimationFrame(frame);
+      running = true;
+      if (typeof document !== 'undefined') document.addEventListener('visibilitychange', visibility);
+      resume();
     },
     still() {
       redraw();
@@ -88,6 +123,8 @@ export function fixedLoop({ dt, step, draw }: { dt: number; step: () => void; dr
     stop() {
       stopped = true;
       cancelAnimationFrame(raf);
+      raf = 0;
+      if (running && typeof document !== 'undefined') document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('resize', redraw);
     },
   };

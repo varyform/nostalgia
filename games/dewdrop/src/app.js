@@ -3,7 +3,7 @@
 // touch controls, the saved progress and the autosave (a checkpoint as each stage of a run
 // begins, resumed from the title's CONTINUE). It never draws: the renderer (hd/render.js)
 // reads this `app` object every frame.
-import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
+import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave, savedAgo } from '@nostalgia/save';
 import meta from '../game.json';
@@ -64,7 +64,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', toggleFullscreen); // from the key event itself, as browsers require
     listen(cv, 'dblclick', toggleFullscreen);
-    listen(window, 'blur', () => { if (app.state === 'play') setState('pause'); });
+    onAway(listen, () => { if (app.state === 'play') setState('pause'); });
     app.touch = createTouch(cv, { listen });
     app.editor = createEditor(app, { listen, cv, save: () => store() });
   }

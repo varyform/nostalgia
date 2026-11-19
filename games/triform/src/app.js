@@ -2,7 +2,7 @@
 // over, victory), the attract-mode demo, sound, the saved best and the autosave (a checkpoint
 // as each zone begins, resumed from the title's CONTINUE). It never draws: a
 // renderer (vga/render.js today) reads this `app` object every frame.
-import { fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
+import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave, savedAgo } from '@nostalgia/save';
 import meta from '../game.json';
@@ -74,7 +74,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'pointerdown', unlock);
     input.on('fullscreen', toggleFullscreen); // from the key event itself, as browsers require
     listen(cv, 'dblclick', toggleFullscreen);
-    listen(window, 'blur', () => { if (app.state === 'play') setState('pause'); });
+    onAway(listen, () => { if (app.state === 'play') setState('pause'); });
   }
 
   // ---------- input → actions ----------

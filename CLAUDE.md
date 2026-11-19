@@ -38,7 +38,7 @@ the mechanics. `game.json` credits the original in `after` + `year`.
 
 - `@nostalgia/game/host` — `host({ demo, play })` starts the page; `?demo=on`, `?sound=off`; postMessage
   `{ nostalgia: 'play' | 'exit' }` with the launcher.
-- `@nostalgia/game/runtime` — `listeners()`, `fixedLoop()`, `fitWide()` / `fitPixels()`, `storage()`,
+- `@nostalgia/game/runtime` — `listeners()`, `fixedLoop()`, `onAway()`, `fitWide()` / `fitPixels()`, `storage()`,
   `toggleFullscreen()`, `canvasPoint()`.
 - `@nostalgia/input` — `createInput` from `game.json`'s `input`; glyphs follow the last device (keyboard, pad, touch).
 - `@nostalgia/audio` — `createSynth`; context made on the first user gesture; respects `sound`; `M` toggles. Voices:
@@ -54,6 +54,8 @@ the mechanics. `game.json` credits the original in `after` + `year`.
 
 - Canvas size comes from `innerWidth`/`innerHeight` (via `fitWide`/`fitPixels`), never from the canvas's
   `clientWidth`; DPR capped at 2, ~2560 px wide.
+- Away (blur, hidden tab, background app): `onAway(listen, …)` opens the pause screen (not in the demo). The loop
+  and the synth already stop by themselves while the tab is hidden.
 - Title: a `quit` action (`Q`/`Esc`, pad East/Select) calls `onExit`; the EXIT entry shows only when `onExit` is set.
   Keyboard, gamepad and touch must reach every menu entry.
 - Demo (`?demo=on`): the autopilot plays plausibly (and sometimes loses), input ignored, no audio, no storage reads or

@@ -1,5 +1,5 @@
 'use strict';
-import { fitPixels, fixedLoop, listeners, storage, toggleFullscreen } from '@nostalgia/game/runtime';
+import { fitPixels, fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput, drawPrompt, glyphs, measureGlyphs, drawGlyphs, measureGlyph, parsePrompt } from '@nostalgia/input';
 import { createAutosave } from '@nostalgia/save';
 import meta from '../game.json';
@@ -155,7 +155,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     input.on('fullscreen', fullscreen);
     listen(window, 'keydown', () => audio.unlock());
     listen(cv, 'dblclick', fullscreen);
-    listen(window, 'blur', () => { if (state === 'play') paused = true; });
+    onAway(listen, () => { if (state === 'play' && !paused) { paused = true; audio.engine(false); } });
   }
   let I = {};
   function readInput(dt) {

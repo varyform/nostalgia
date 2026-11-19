@@ -257,3 +257,30 @@ describe('destroy', () => {
     expect(rec.log).not.toContain(`${ctx}.close()`);
   });
 });
+
+describe('hidden tab', () => {
+  it('suspends the context while hidden and resumes it when shown; not after destroy', () => {
+    const doc = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+    const prev = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = doc;
+    try {
+      const audio = createSynth({ seed: 1, levels: { master: 1, music: 1, sfx: 1 }, arrange: () => ({ effects: {} }) });
+      audio.unlock();
+      const ctx = rec.log.find(l => l.includes('=new AudioContext()'))!.split('=')[0];
+      const flip = (v: string) => {
+        doc.visibilityState = v;
+        doc.dispatchEvent(new Event('visibilitychange'));
+      };
+      flip('hidden');
+      expect(rec.log.at(-1)).toBe(`${ctx}.suspend()`);
+      flip('visible');
+      expect(rec.log.at(-1)).toBe(`${ctx}.resume()`);
+      audio.destroy();
+      const from = rec.log.length;
+      flip('hidden');
+      expect(rec.log.length).toBe(from);
+    } finally {
+      (globalThis as { document?: unknown }).document = prev;
+    }
+  });
+});

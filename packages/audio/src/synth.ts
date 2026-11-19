@@ -211,6 +211,26 @@ export function createSynth<T extends Track, M extends object = object>(opts: Sy
     timer: ReturnType<typeof setInterval> | 0 = 0,
     holdUntil = 0;
 
+  // a hidden tab (another tab, minimised, the iOS app in the background) hears nothing: the
+  // context is suspended, which also stops its clock, so the score goes on from where it was
+  let awaySuspended = false;
+  function visibility() {
+    if (!ac || ac.state === 'closed') return;
+    if (document.visibilityState === 'hidden') {
+      if (ac.state !== 'running') return;
+      awaySuspended = true;
+      void ac.suspend().catch(() => {});
+    } else if (awaySuspended) {
+      awaySuspended = false;
+      void ac.resume().catch(() => {});
+    }
+  }
+  const watch = (on: boolean) => {
+    if (typeof document === 'undefined') return;
+    if (on) document.addEventListener('visibilitychange', visibility);
+    else document.removeEventListener('visibilitychange', visibility);
+  };
+
   function unlock() {
     if (ac) {
       // not only 'suspended': iOS leaves it 'interrupted' (a call, Siri, another app) until told
@@ -223,6 +243,7 @@ export function createSynth<T extends Track, M extends object = object>(opts: Sy
       ac = null;
       return;
     }
+    watch(true);
     master = ac.createGain();
     master.gain.value = soundOn ? levels.master : 0;
     const into = (bus: 'master' | Bus, node: GainNode, to: AudioNode) => {
@@ -547,6 +568,8 @@ export function createSynth<T extends Track, M extends object = object>(opts: Sy
 
   function destroy() {
     clearInterval(timer);
+    watch(false);
+    awaySuspended = false;
     // an OfflineAudioContext (render harnesses) has no close()
     if (ac && typeof ac.close === 'function') void ac.close().catch(() => {});
     ac = null;
