@@ -2,7 +2,7 @@
 // through @nostalgia/rig and read back as poses.js's flat poses, so the renderer blends and
 // dresses them as it always has. A rig move's joints are side-on (x forward, y up, the near side
 // +z): the lead limbs are the far side, the rear ones the near. What the editor has no move for
-// (a chained kick's raised knee, the run stance's idle, the teacher) is left to poses.js: null.
+// (a foe's chained kick, the run stance's idle, the teacher) is left to poses.js: null.
 import { createJointBuffer, Joint, JOINT_STRIDE, parseProject, REST_POSE, resolveKeys, sampleMove, solvePose } from '@nostalgia/rig';
 import data from './rig-moves.json' with { type: 'json' };
 
@@ -44,7 +44,8 @@ function pick(f, kind, ctx) {
   const T = (f.moveT ?? 0) * FPS;
   const named = (name, frame) => (MOVE.has(name) ? [MOVE.get(name), frame] : null);
   if (m.startsWith('punch')) return named(`${who} ${words(m)}${f.arm === 1 ? ' (lead arm)' : ''}`, T);
-  if (m.startsWith('kick')) return f.chain ? null : named(`${who} ${words(m)}`, T);
+  // A held kick kicks again (sim.js CHAIN): Wren's second and third have moves of their own.
+  if (m.startsWith('kick')) return named(`${who} ${words(m)}${f.chain ? ` ${f.chain + 1}` : ''}`, T);
   if (m === 'duck' && f.stance === 'run') return kind === 'hero' ? named('Wren duck (running)', 0) : null;
   switch (m) {
     case 'palm':

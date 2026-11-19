@@ -265,6 +265,22 @@ function striker(pose, kick) {
   const [joint, radius] = STRIKERS.filter(([n]) => n.startsWith(kick ? "ball" : "hand")).reduce((a, b) => (x(b[0]) > x(a[0]) ? b : a));
   return { joint, radius };
 }
+// How the chain's later kicks differ from the first, at their strike (poses.js's numbers: m and
+// degrees): a hop, the torso back and the head down a touch more, the kicking foot further out
+// and up (less for a low kick, which stays low) and more pointed, the support heel turning,
+// the arms counter-swinging. The second kick takes one share, the third (the finisher) two.
+const CHAINED = { hy: 0.012, t: -3.5, n: 3, rx: 0.035, ry: 0.045, rf: -6, lf: -7, la: 11, le: -6, ra: -9, re: 5 };
+const RISE = { kickHigh: 1, kickMid: 0.6, kickLow: 0.25 };
+/** The game's chained kick (n 1 or 2), varied by CHAINED: none at its start, all of it through its window, settling after. */
+const chained = (kind, id, n) => (f) => {
+  const T = f / FPS;
+  const p = poseFor(fighter({ move: id, moveT: T, chain: n }), kind, { t: 0 });
+  const { on, off, dur } = MOVES[id];
+  const e = T < on ? io(T / on) : T < off ? 1 : io(1 - (T - off) / (dur - off));
+  const out = { ...p };
+  for (const [k, d] of Object.entries(CHAINED)) out[k] += d * n * e * (k === "ry" ? RISE[id] : 1);
+  return out;
+};
 const words = (id) => id.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`);
 
 /** @type {{ name: string, tags: string[], frames: number, loop?: boolean, at(f: number): object, active?: object }[]} */
@@ -325,6 +341,21 @@ for (const [kind, who, walk] of KINDS) {
       at: timed(kind, id),
       active: active(id),
     });
+  }
+  // Wren's kick chain (sim.js CHAIN: a held kick kicks again, up to three): the second and
+  // third from the knee still raised, each a little bigger than the last (CHAINED).
+  if (kind === "hero") {
+    for (const id of ["kickHigh", "kickMid", "kickLow"]) {
+      for (const n of [1, 2]) {
+        specs.push({
+          name: `${who} ${words(id)} ${n + 1}`,
+          tags: [tag, "attack", id, "chain"],
+          frames: frames(MOVES[id].dur),
+          at: chained(kind, id, n),
+          active: active(id),
+        });
+      }
+    }
   }
   for (const id of ["block", "blockLow", "duck"]) {
     specs.push({ name: `${who} ${words(id)}`, tags: [tag, "held", id], frames: 1, loop: true, at: timed(kind, id) });
