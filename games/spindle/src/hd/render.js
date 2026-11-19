@@ -303,6 +303,16 @@ export function createRenderer(cv) {
       g.fillStyle = rg; g.fillRect(cx - R * 1.2, yw, R * 2.4, depth);
     }
 
+    // nothing of the tower shows through the sea: it's drawn clipped to above the front of the
+    // waterline (so a sinking tower goes under, crown and all; Clink on the surface isn't clipped)
+    g.save();
+    const shore = [];
+    for (let k = 0; k <= 24; k++) { const a = -Math.PI / 2 + (Math.PI * k) / 24; shore.push([PX(a, R * 1.02), PY(a, R * 1.02, seaH)]); }
+    if (shore[0][0] > shore[24][0]) shore.reverse();
+    g.beginPath(); g.moveTo(0, -1); g.lineTo(cw, -1); g.lineTo(cw, shore[24][1]);
+    for (let k = 24; k >= 0; k--) g.lineTo(shore[k][0], shore[k][1]);
+    g.lineTo(0, shore[0][1]); g.closePath(); g.clip();
+
     // the cells, nearest the back first
     const cells = [];
     for (let r = rLo; r <= Math.min(T.rows, rHi + 1); r++) for (let c = 0; c < COLS; c++) {
@@ -363,10 +373,11 @@ export function createRenderer(cv) {
       }
     }
     // wet, weedy stone at the foot
-    if (seaH + 2.5 > hLo) {
+    const wet = Math.min(top, seaH + 2.4); // no higher than the tower (none once it's under)
+    if (seaH + 2.5 > hLo && wet > seaH) {
       const wg = g.createLinearGradient(0, Yh(seaH + 2.4), 0, Yh(seaH));
       wg.addColorStop(0, 'rgba(10,40,30,0)'); wg.addColorStop(1, 'rgba(10,40,30,0.55)');
-      g.fillStyle = wg; band(-Math.PI / 2, Math.PI / 2, R, seaH + 2.4, seaH, 16); g.fill();
+      g.fillStyle = wg; band(-Math.PI / 2, Math.PI / 2, R, wet, seaH, 16); g.fill();
     }
     // the crown: a stone lip, merlons and a pennant
     if (top < hHi) {
@@ -412,6 +423,7 @@ export function createRenderer(cv) {
       g.fillStyle = '#ffd24a';
       for (const f of [0.2, 0.5, 0.8]) { const a = a0 + SEG * f; g.beginPath(); g.arc(PX(a, R + PR * 1.05), PY(a, R + PR * 1.05, ly - 0.11), 2.5 * u, 0, TAU); g.fill(); }
     });
+    g.restore();
     // the sea's edge round the foot
     if (yw < ch + RH) {
       g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 3 * u;

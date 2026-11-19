@@ -1,6 +1,7 @@
 // Proves every tower can be climbed, headless, on the real sim:
 //   1. the crown door can be reached from the start (the move graph of solve.mjs's reach());
-//   2. no soft locks: from every cell Clink can get to, the crown door can still be reached,
+//   2. every crab has a level ledge beside its door, to bubble it off from;
+//      no soft locks: from every cell Clink can get to, the crown door can still be reached,
 //      so he can't strand himself (being knocked off counts as a way to get somewhere);
 //   3. replays each recorded route in src/routes.js, every enemy and squall on, and checks it
 //      reaches the crown door in time without a knock, a splash or a lost life, then plays the
@@ -13,7 +14,7 @@
 //   mise exec -- node games/spindle/tools/verify.mjs [--seeds 2] [--soak 30] [towers…, 1-based]
 import { createRoutePilot } from '../src/pilot.js';
 import { ROUTES } from '../src/routes.js';
-import { COLS, DT, createSim } from '../src/sim.js';
+import { COLS, DT, K, createSim } from '../src/sim.js';
 import { TOWERS } from '../src/towers.js';
 import { GOAL, reach, solveTower } from './solve.mjs';
 
@@ -32,6 +33,11 @@ for (let i = 0; i < TOWERS.length; i++) {
   const stuck = [...R.live].filter(v => !R.dist.has(v));
   if (!R.dist.has([...R.live][0])) fail(i, 'the crown door cannot be reached');
   if (stuck.length) fail(i, `stuck on ${stuck.map(cell).join(' ')}`);
+  // a crab on its door needs a ledge level with it, to stand on and bubble it off from: from a
+  // step below, a shot only grazes it and Clink can't get up without landing on it
+  const T = createSim().towers[i], level = [K.LEDGE, K.SLIP];
+  for (const f of T.spawns) if (f.k === 'crab' && ![1, -1].some(d => level.includes(T.at((f.c + d + COLS) % COLS, f.r))))
+    fail(i, `the crab at ${cell(f.c + COLS * f.r)} has no level ledge beside it`);
   // 3: the route
   const r = ROUTES[i];
   if (!r) { fail(i, 'no recorded route'); continue; }
