@@ -1,14 +1,16 @@
 // The HD renderer: Cinder side-on at the window's own resolution, in the largest 16:9 box.
 // A painted backdrop per scene in parallax layers (cached per theme and size), the floor, the
 // lanterns and their flicker, drop gates, the archer on the wall and darts, then the figures:
-// skeletal rigs (rig.js) posed from each fighter's move (poses.js), cross-faded whenever the
-// move changes, with sash tails, hair ties and coats that trail behind. Hits throw sparks and
-// ink and shake the view. It only reads `app` and `sim.s`.
+// skeletal rigs (rig.js) posed from each fighter's move (the rig editor's, rig-poses.js; with
+// ?rig=off, or where it has none, the hand-made poses.js), cross-faded whenever the move
+// changes, with sash tails, hair ties and coats that trail behind. Hits throw sparks and ink
+// and shake the view. It only reads `app` and `sim.s`.
 //
 //   const view = createRenderer(canvas, app);
 //   view.events(sim.events, sim); view.draw(app); view.menuAt(x, y) → index | null
 import { fitWide } from '@nostalgia/game/runtime';
-import { blendFor, KNEEL, lerpPose, poseFor } from './poses.js';
+import { blendFor, KNEEL, lerpPose, poseFor as handPose } from './poses.js';
+import { rigPoseFor } from './rig-poses.js';
 import { anchors, drawFigure, palette, ribbon, SIZE, solve, TRAIL } from './rig.js';
 import { buildLayers, clamp, drawFloor, drawLamp, drawMist, drawShine, drawWeather, hash, lampsIn, makeWeather, mix, TAU, THEMES } from './scenery.js';
 import { banner, drawHud, drawTouch, label, nameCard, INK, DIM, EMBER, HEAD, RED, pad6 } from './hud.js';
@@ -18,6 +20,10 @@ const VIEW = 10; // metres across the screen
 const H_AT = { high: 1.5, mid: 1.1, low: 0.5 }; // where blows and darts land
 const GATE_H = 3.2; // the drop gates' lintel
 const ease = q => q * q * (3 - 2 * q);
+
+// ?rig=off draws the hand-made poses, to compare.
+const RIG = typeof location === 'undefined' || new URLSearchParams(location.search).get('rig') !== 'off';
+const poseFor = (f, kind, ctx) => (RIG && rigPoseFor(f, kind, ctx)) || handPose(f, kind, ctx);
 
 export function createRenderer(cv, app0) {
   const g = cv.getContext('2d');

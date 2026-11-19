@@ -2,7 +2,8 @@
 // sampled per frame with the game's own poseFor, its 2D skeleton (rig.js solve) is laid out as
 // the rig's joints (lead limbs on the far side, rear on the near side), and the frames are fitted
 // and thinned to keys with the editor's own Import pipeline (fit.ts), within 1 cm of that.
-// Open the result in the editor with Import.
+// Open the result in the editor with Import. The game plays a copy put through the editor's
+// Simplify (src/hd/rig-moves.json): fewer keys, channels and digits, within GAME_TOLERANCE.
 //
 //   node games/cinder/tools/rig-moves.mjs [out.rig.json]   (Node 24: it loads the editor's .ts)
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,7 @@ const { poseFor, lerpPose, KNEEL, READY } = await import(`${CINDER}/hd/poses.js`
 const { solve, BONE } = await import(`${CINDER}/hd/rig.js`);
 const { MOVES } = await import(`${CINDER}/moves.js`);
 const { fitPose, posesToMove } = await import(`${RIG}/editor/fit.ts`);
+const { simplifyMove } = await import(`${RIG}/editor/simplify.ts`);
 const { newProject, serialize } = await import(`${RIG}/rig/format.ts`);
 const { solvePose, FINGER_NAMES, REST_POSE } = await import(`${RIG}/rig/pose.ts`);
 const { createJointBuffer, DEFAULT_PROPORTIONS, Joint, JOINT_STRIDE } = await import(
@@ -361,6 +363,25 @@ const out = process.argv[2] ?? fileURLToPath(new URL("../cinder.rig.json", impor
 writeFileSync(out, serialize(project));
 const keys = built.reduce((n, b) => n + b.move.keys.length, 0);
 console.log(`${built.length} moves, ${keys} keys → ${out}`);
+
+// The game's copy: how far a joint may stray from the full moves (m). A figure is ~120 px tall
+// on a phone and ~500 on a desktop: 1 cm is a pixel or three.
+const GAME_TOLERANCE = 0.01;
+let strays = 0;
+const game = newProject(
+  "Cinder",
+  built.map(({ move }) => {
+    const s = simplifyMove(move, props, GAME_TOLERANCE);
+    strays = Math.max(strays, s.error);
+    return s.move;
+  }),
+);
+game.fps = FPS;
+game.proportions = props;
+const gameOut = fileURLToPath(new URL("../src/hd/rig-moves.json", import.meta.url));
+writeFileSync(gameOut, JSON.stringify(JSON.parse(serialize(game))));
+const gameKeys = game.moves.reduce((n, m) => n + m.keys.length, 0);
+console.log(`game copy: ${gameKeys} keys, within ${(strays * 100).toFixed(1)} cm → ${gameOut}`);
 console.log(`heels lifted up to ${(heel.max * 100).toFixed(1)} cm`);
 console.log(`worst fit: ${(worst.err * 100).toFixed(1)} cm (${worst.move})`);
 for (const b of built.filter((b) => b.err > 0.02)) console.log(`  ${b.move.name}: ${(b.err * 100).toFixed(1)} cm`);

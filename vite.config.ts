@@ -79,7 +79,8 @@ export default defineConfig({
     singleQuote: true,
     printWidth: 120,
     arrowParens: 'avoid',
-    // games/ holds the pre-build-system sources, formatted by hand; they move over as they're touched
-    ignorePatterns: ['.build/**', 'dist/**', 'games/**', 'pnpm-lock.yaml'],
+    // games/ holds the pre-build-system sources, formatted by hand; they move over as they're touched.
+    // packages/rig/src is the rig editor's runtime as the editor formats it (scripts/sync-rig.mjs).
+    ignorePatterns: ['.build/**', 'dist/**', 'games/**', 'packages/rig/src/**', 'pnpm-lock.yaml'],
   },
 });

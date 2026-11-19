@@ -57,6 +57,7 @@ selects, A / ✕ runs, and the key hints turn into the pad's buttons.
 | `packages/save/`  | `@nostalgia/save`, the autosave behind CONTINUE (below)    |
 | `packages/game/`  | `@nostalgia/game`, the game folder contract (below)        |
 | `packages/gl/`    | `@nostalgia/gl`, the WebGL2 engine of the 3D games (below) |
+| `packages/rig/`   | `@nostalgia/rig`, moves made in the rig editor (below)     |
 | `dist/`           | Compiled pages, committed: one HTML file per game version  |
 
 ## Develop
@@ -70,6 +71,7 @@ mise run build        # compile every page into its game repo (or: mise run buil
 mise run check        # format check, lint, type-check
 mise run test         # unit tests
 mise run ci           # all of the above
+mise run rig-sync     # copy the rig editor's runtime into packages/rig (-- --check: is it behind?)
 ```
 
 Commit `dist/` together with the sources it was built from.
@@ -193,6 +195,23 @@ R.drawMesh(buf, [0, B.n], modelOf(pos, forward, up));
 `destroy()` frees only the engine's own objects and keeps the context: the launcher turns a demo into the game on the
 same canvas. `@nostalgia/gl/ui` is the 2D HUD helper over the GL canvas. The API is documented in
 `packages/gl/src/index.ts`.
+
+## Rig moves: `@nostalgia/rig`
+
+Moves made in the [rig editor](https://github.com/varyform/rig-editor) (a 3D stick-figure rig, keyframed, with IK):
+its runtime, copied from the editor's `src/rig/` by `mise run rig-sync` and never edited here, so the editor stays
+where it's made and tested. Plain TypeScript with no imports; deterministic maths (`Exact`), so replays agree.
+
+```js
+import { jointsAt, Joint, JOINT_STRIDE, parseProject } from '@nostalgia/rig';
+
+const project = parseProject(movesJson); // a project exported from the editor (any version; it migrates)
+const punch = project.moves.find(m => m.name === 'Punch');
+const J = jointsAt(punch, frame, project.proportions); // frames blend; x forward, y up, z the near side
+const hand = J[Joint.handNear * JOINT_STRIDE + 1]; // the near hand's height
+```
+
+Cinder plays its fighters this way (`games/cinder/src/hd/rig-poses.js`, its moves made by `tools/rig-moves.mjs`).
 
 ## Adding a game
 

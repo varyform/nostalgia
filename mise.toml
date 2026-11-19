@@ -43,6 +43,10 @@ depends = ["check", "test", "build"]
 description = "Roll out the committed dist/ to ogg.ol3h.org (Kamal builds from HEAD)"
 run = "kamal deploy"
 
+[tasks.rig-sync]
+description = "Copy the rig editor's runtime into packages/rig"
+run = "node scripts/sync-rig.mjs"
+
 [tasks.reap]
 description = "Close headless test browsers whose script is gone"
 run = "node scripts/headless.js --reap"

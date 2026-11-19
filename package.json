@@ -7,6 +7,7 @@
     "@nostalgia/game": "workspace:*",
     "@nostalgia/gl": "workspace:*",
     "@nostalgia/input": "workspace:*",
+    "@nostalgia/rig": "workspace:*",
     "@nostalgia/save": "workspace:*"
   },
   "devDependencies": {

@@ -1,0 +1,10 @@
+{
+  "name": "@nostalgia/rig",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The rig editor's runtime (~/projects/rig-editor src/rig), copied by `mise run rig-sync`: play moves made in the editor. Don't edit src/ here; change the editor and sync.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

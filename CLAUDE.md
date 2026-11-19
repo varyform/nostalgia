@@ -48,6 +48,9 @@ the mechanics. `game.json` credits the original in `after` + `year`.
 - `@nostalgia/gl` — the 3D games' WebGL2 engine: `createGL` (meshes, instances, glass, shadows, mist, thermal, points;
   `destroy()` keeps the context), mesh parts, height-field chunks; DOM-free `/noise`, `/math`, `/mesh`, `/terrain` for
   sims and tools; `/ui` for the 2D HUD.
+- `@nostalgia/rig` — moves made in the rig editor: `parseProject`, `jointsAt`, `sampleMove`, `solvePose`. Its `src/` is
+  the editor's runtime, copied by `mise run rig-sync`: change it in the editor (`~/projects/rig-editor`, with its
+  tests) and sync, never here.
 - A change a game needs in a package goes in the package (with tests), not in a local copy.
 
 ## Game rules

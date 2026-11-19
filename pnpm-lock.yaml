@@ -24,6 +24,9 @@ importers:
       '@nostalgia/input':
         specifier: workspace:*
         version: link:packages/input
+      '@nostalgia/rig':
+        specifier: workspace:*
+        version: link:packages/rig
       '@nostalgia/save':
         specifier: workspace:*
         version: link:packages/save
@@ -52,6 +55,8 @@ importers:
         version: link:../input
 
   packages/input: {}
+
+  packages/rig: {}
 
   packages/save: {}
 
