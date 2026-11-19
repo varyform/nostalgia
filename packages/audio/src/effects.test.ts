@@ -241,6 +241,17 @@ describe('noise sources', () => {
   });
 });
 
+describe('silent voices', () => {
+  it('a voice at volume 0 plays at the floor instead of throwing', () => {
+    expect(() =>
+      run((v, t) => {
+        v.tone(440, 440, t, 0.1, 0, 'square');
+        v.hiss(t, 0.1, 0);
+      }),
+    ).not.toThrow();
+  });
+});
+
 describe('destroy', () => {
   it('copes with a context that has no close() (an OfflineAudioContext in a render harness)', () => {
     const audio = createSynth({ seed: 1, levels: { master: 1, music: 1, sfx: 1 }, arrange: () => ({ effects: {} }) });

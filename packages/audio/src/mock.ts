@@ -75,6 +75,8 @@ export function createRecorder({ sampleRate = 44100, seed = 1 } = {}): Recorder 
       return this.#rec('linearRampToValueAtTime', [v, t]);
     }
     exponentialRampToValueAtTime(v: number, t: number) {
+      // as the browsers do: an exponential ramp can't reach or cross zero
+      if (v === 0 || Number.isNaN(v)) throw new RangeError(`exponentialRampToValueAtTime: ${v}`);
       return this.#rec('exponentialRampToValueAtTime', [v, t]);
     }
     setTargetAtTime(v: number, t: number, c: number) {

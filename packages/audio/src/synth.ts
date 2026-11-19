@@ -389,6 +389,7 @@ export function createSynth<T extends Track, M extends object = object>(opts: Sy
   const busNode = (b: Target): AudioNode =>
     b === 'music' ? musicBus! : b === 'sfx' ? sfxBus! : 'fx' in b ? b.fx!.input : b;
   function env(g: GainNode, t: number, a: number, peak: number, dur: number) {
+    peak = Math.max(floor, peak); // a silent voice (a level faded to 0) mustn't throw
     // silent until t: a source can start a fraction of a sample early, and a gain still at its
     // default 1 then lets one sample through at full level, a click
     g.gain.value = 0;
