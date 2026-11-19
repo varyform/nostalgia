@@ -72,6 +72,15 @@ export interface Pose {
   yaw?: number;
   /** Spine side-bend toward the near side, radians. */
   roll?: number;
+  /** The upper spine's side-bend on top of `roll`, curling up it as `bend` does `lean`. */
+  upperRoll?: number;
+  /**
+   * The chest turning against the hips, about the top of the spine,
+   * radians, the same way as `yaw` (positive brings the far shoulder
+   * forward): the shoulders, the neck and head and the elbows' bend turn
+   * with it.
+   */
+  spineTwist?: number;
   /**
    * The hip line's tilt about the way the body faces, radians, turning the
    * same way as `roll` (positive drops the near hip): a high kick lifts the
@@ -132,6 +141,8 @@ export const clonePose = (p: Pose): Pose => ({
   bend: p.bend ?? 0,
   yaw: p.yaw ?? 0,
   roll: p.roll ?? 0,
+  upperRoll: p.upperRoll ?? 0,
+  spineTwist: p.spineTwist ?? 0,
   hipTilt: p.hipTilt ?? 0,
   pitch: p.pitch ?? 0,
   swivel: { ...p.swivel },
@@ -236,6 +247,8 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
     bend: lerp(a.bend ?? 0, b.bend ?? 0, t),
     yaw: lerp(a.yaw ?? 0, b.yaw ?? 0, t),
     roll: lerp(a.roll ?? 0, b.roll ?? 0, t),
+    upperRoll: lerp(a.upperRoll ?? 0, b.upperRoll ?? 0, t),
+    spineTwist: lerp(a.spineTwist ?? 0, b.spineTwist ?? 0, t),
     hipTilt: lerp(a.hipTilt ?? 0, b.hipTilt ?? 0, t),
     pitch: lerp(a.pitch ?? 0, b.pitch ?? 0, t),
     swivel: lerpRecord(LIMBS, a.swivel, b.swivel, t),
@@ -257,6 +270,8 @@ export const CORE: ReadonlySet<string> = new Set([
   "bend",
   "yaw",
   "roll",
+  "upperRoll",
+  "spineTwist",
   "hipTilt",
   "pitch",
 ]);
@@ -288,6 +303,8 @@ export function lerpPoseLead(a: Pose, b: Pose, t: number, lag = LEAD_LAG): Pose 
   limbs.yaw = lerp(a.yaw ?? 0, b.yaw ?? 0, core);
   limbs.roll = lerp(a.roll ?? 0, b.roll ?? 0, core);
   limbs.hipTilt = lerp(a.hipTilt ?? 0, b.hipTilt ?? 0, core);
+  limbs.upperRoll = lerp(a.upperRoll ?? 0, b.upperRoll ?? 0, core);
+  limbs.spineTwist = lerp(a.spineTwist ?? 0, b.spineTwist ?? 0, core);
   limbs.pitch = lerp(a.pitch ?? 0, b.pitch ?? 0, core);
   return limbs;
 }
@@ -302,8 +319,14 @@ const ribs = vec3();
 const chest = vec3();
 const neck = vec3();
 const head = vec3();
-/** The chest's sideways axis (toward the near side), turned with the roll. */
+/** The chest's sideways axis (toward the near side), turned with the roll and the twist. */
 const side = vec3();
+/** The chest's up: along the spine's top bone. */
+const chestUp = vec3();
+/** What the elbows bend about: body z, turned with the spine's twist. */
+const armHinge = vec3();
+/** The hinge the knees bend about: body z. */
+const LEG_HINGE: Vec3 = { x: 0, y: 0, z: 1 };
 /** The hips' sideways axis, turned with the hip tilt. */
 const hipSide = vec3();
 const root = vec3();
@@ -318,30 +341,51 @@ const axis = vec3();
 /** Lays out the spine and head of `pose` in body space, into the scratch vectors. */
 function layOutSpine(pose: Pose, props: Proportions): void {
   const roll = pose.roll ?? 0;
-  const cosRoll = Exact.cos(roll);
-  const sinRoll = Exact.sin(roll);
-  /** `length` from `from` at `angle` from vertical toward +x, side-bent by the roll toward +z. */
-  const step = (angle: number, length: number, from: Vec3, into: Vec3): void => {
+  const upperRoll = pose.upperRoll ?? 0;
+  const twist = pose.spineTwist ?? 0;
+  /** A direction at `angle` from vertical toward +x, side-bent by `r` toward +z. */
+  const dir = (angle: number, r: number, into: Vec3): Vec3 => {
     const c = Exact.cos(angle);
-    into.x = from.x + Exact.sin(angle) * length;
-    into.y = from.y + c * cosRoll * length;
-    into.z = from.z + c * sinRoll * length;
+    into.x = Exact.sin(angle);
+    into.y = c * Exact.cos(r);
+    into.z = c * Exact.sin(r);
+    return into;
   };
-  // Four bones curving from `lean` at the bottom to lean + bend at the top.
+  const put = (d: Vec3, length: number, from: Vec3, into: Vec3): void => {
+    into.x = from.x + d.x * length;
+    into.y = from.y + d.y * length;
+    into.z = from.z + d.z * length;
+  };
+  // Four bones curving from `lean` at the bottom to lean + bend at the top, and from `roll`
+  // to roll + upperRoll.
   const bend = pose.bend ?? 0;
   const upper = pose.lean + bend;
+  const top = roll + upperRoll;
   pelvis.x = pose.pelvis.x;
   pelvis.y = pose.pelvis.y;
   pelvis.z = pose.pelvis.z ?? 0;
-  step(pose.lean, props.spineLower / 2, pelvis, belly);
-  step(pose.lean + bend / 3, props.spineLower / 2, belly, waist);
-  step(pose.lean + (bend * 2) / 3, props.spineUpper / 2, waist, ribs);
-  step(upper, props.spineUpper / 2, ribs, chest);
-  step(upper + pose.headTilt * 0.5, props.neck, chest, neck);
-  step(upper + pose.headTilt, props.headRadius, neck, head);
+  put(dir(pose.lean, roll, axis), props.spineLower / 2, pelvis, belly);
+  put(dir(pose.lean + bend / 3, roll + upperRoll / 3, axis), props.spineLower / 2, belly, waist);
+  put(
+    dir(pose.lean + (bend * 2) / 3, roll + (upperRoll * 2) / 3, axis),
+    props.spineUpper / 2,
+    waist,
+    ribs,
+  );
+  put(dir(upper, top, chestUp), props.spineUpper / 2, ribs, chest);
+  // The neck and head tilt in the chest's plane, turned with it.
+  rotateAbout(dir(upper + pose.headTilt * 0.5, top, axis), chestUp, -twist);
+  put(axis, props.neck, chest, neck);
+  rotateAbout(dir(upper + pose.headTilt, top, axis), chestUp, -twist);
+  put(axis, props.headRadius, neck, head);
   side.x = 0;
-  side.y = -sinRoll;
-  side.z = cosRoll;
+  side.y = -Exact.sin(top);
+  side.z = Exact.cos(top);
+  rotateAbout(side, chestUp, -twist);
+  armHinge.x = 0;
+  armHinge.y = 0;
+  armHinge.z = 1;
+  rotateAbout(armHinge, chestUp, -twist);
   const tilt = pose.hipTilt ?? 0;
   hipSide.x = 0;
   hipSide.y = -Exact.sin(tilt);
@@ -488,7 +532,7 @@ function rotateAbout(v: Vec3, k: Vec3, angle: number): void {
  * forward/up and elbows (-1) down/back in the body's side plane (the hinge
  * axis is sideways, z), then `swivel` rotates the bend about the limb.
  */
-function bendPole(from: Vec3, bend: 1 | -1, swivel: number): void {
+function bendPole(from: Vec3, bend: 1 | -1, swivel: number, hinge: Vec3): void {
   axis.x = target.x - from.x;
   axis.y = target.y - from.y;
   axis.z = target.z - from.z;
@@ -496,14 +540,15 @@ function bendPole(from: Vec3, bend: 1 | -1, swivel: number): void {
   axis.x /= len;
   axis.y /= len;
   axis.z /= len;
-  // z × limb direction: the 2D "counter-clockwise" perpendicular.
-  pole.x = -axis.y * bend;
-  pole.y = axis.x * bend;
-  pole.z = 0;
-  // A limb pointing straight sideways has no side-plane bend: fall back to forward/down.
-  if (Exact.hypot(pole.x, pole.y) < 0.15) {
+  // hinge × limb direction (with the hinge z, the 2D "counter-clockwise" perpendicular).
+  pole.x = (hinge.y * axis.z - hinge.z * axis.y) * bend;
+  pole.y = (hinge.z * axis.x - hinge.x * axis.z) * bend;
+  pole.z = (hinge.x * axis.y - hinge.y * axis.x) * bend;
+  // A limb along the hinge has no bend plane: fall back to forward/down.
+  if (Exact.hypot(pole.x, pole.y, pole.z) < 0.15) {
     pole.x = bend > 0 ? 1 : 0;
     pole.y = bend > 0 ? 0 : -1;
+    pole.z = 0;
   }
   rotateAbout(pole, axis, swivel);
 }
@@ -722,7 +767,7 @@ export function solvePose(
     const [rootJ, midJ, endJ, tipJ] = LIMB_JOINTS[limb];
     limbRoot(limb, props, root);
     limbTarget(pose, limb, props, target);
-    bendPole(root, arm ? -1 : 1, pose.swivel?.[limb] ?? 0);
+    bendPole(root, arm ? -1 : 1, pose.swivel?.[limb] ?? 0, arm ? armHinge : LEG_HINGE);
     solveTwoBone3(
       root,
       target,
