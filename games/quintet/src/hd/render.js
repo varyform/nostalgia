@@ -397,7 +397,8 @@ export function createRenderer(cv, app0) {
     g.beginPath(); g.roundRect(R.x, R.y, R.w, R.h, 22); g.fill();
     g.strokeStyle = on ? 'rgba(232,184,102,0.6)' : 'rgba(255,255,255,0.14)'; g.lineWidth = 2.5; g.stroke();
     if (input.device.kind === 'touch') label(text.replace(/\{\w+\}\s*/, ''), R.x + R.w / 2, R.y + R.h / 2 + size * 0.36, size, on ? TEXT : 'rgba(255,255,255,0.35)', 600, 'center', 4);
-    else prompt(input, text, R.x + R.w / 2, R.y + R.h / 2 + size * 0.36, size, on ? TEXT : 'rgba(255,255,255,0.35)', 'center', 600);
+    // drawPrompt centres on y (textBaseline middle), unlike label()'s baseline
+    else prompt(input, text, R.x + R.w / 2, R.y + R.h / 2, size, on ? TEXT : 'rgba(255,255,255,0.35)', 'center', 600);
   }
   function lowGlow(app, t) {
     if (!app.low) return;
