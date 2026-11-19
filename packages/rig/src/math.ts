@@ -127,3 +127,29 @@ export const vec3 = (x = 0, y = 0, z = 0): Vec3 => ({ x, y, z });
 /** `a`, shifted by whole turns to lie within π of `b` (shortest-way blending). */
 export const nearestAngle = (a: number, b: number): number =>
   a - Math.round((a - b) / (2 * Math.PI)) * 2 * Math.PI;
+
+/**
+ * CSS's cubic-bezier(x1, y1, x2, y2) at `t`: the curve from (0, 0) to (1, 1)
+ * with those two handles, time across and the value up. x1 and x2 must be
+ * within 0..1, so time only runs forward; y may go past either end (an
+ * overshoot). Plain arithmetic, so it's the same in every browser.
+ */
+export function cubicBezier(x1: number, y1: number, x2: number, y2: number, t: number): number {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  // The curve's own parameter where its time is t, by halves.
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 28; i++) {
+    const s = (lo + hi) / 2;
+    if (bezierAt(x1, x2, s) < t) lo = s;
+    else hi = s;
+  }
+  return bezierAt(y1, y2, (lo + hi) / 2);
+}
+
+/** One coordinate of the curve from 0 to 1 with handles at `p1` and `p2`, at parameter `s`. */
+export const bezierAt = (p1: number, p2: number, s: number): number => {
+  const u = 1 - s;
+  return 3 * u * u * s * p1 + 3 * u * s * s * p2 + s * s * s;
+};

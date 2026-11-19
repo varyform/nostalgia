@@ -1,4 +1,4 @@
-import { lerp, smoothstep } from "./math.ts";
+import { cubicBezier, lerp, smoothstep } from "./math.ts";
 import {
   CORE,
   FEET,
@@ -27,6 +27,25 @@ export type Easing = "smooth" | "linear" | "in" | "out" | "lead" | "hold";
 
 export const EASINGS: readonly Easing[] = ["smooth", "linear", "in", "out", "lead", "hold"];
 
+/**
+ * How one channel reaches a key from the key before that sets it, as CSS's
+ * cubic-bezier: (x1, y1, x2, y2), the handles of a curve from the old value
+ * (0, 0) to the new (1, 1), time across. x1 and x2 are within 0..1; y may
+ * overshoot. It's the graph editor's handles, and wins over the key's ease.
+ */
+export type Curve = readonly [number, number, number, number];
+
+/** The eases that are cubic beziers (exactly: smoothstep is one), as curves to start from. */
+export const EASE_CURVES: Readonly<Partial<Record<Easing, Curve>>> = {
+  smooth: [1 / 3, 0, 2 / 3, 1],
+  linear: [1 / 3, 1 / 3, 2 / 3, 2 / 3],
+  in: [1 / 3, 0, 2 / 3, 1 / 3],
+  out: [1 / 3, 2 / 3, 2 / 3, 1],
+};
+
+/** `t` along a curve. */
+export const alongCurve = (c: Curve, t: number): number => cubicBezier(c[0], c[1], c[2], c[3], t);
+
 export interface Key {
   /** Frame from the start of the move, 0 up to the move's length − 1. */
   frame: number;
@@ -41,6 +60,8 @@ export interface Key {
   pose: Partial<Pose>;
   /** How the channels this key sets are reached from their keys before; `smooth` if left out. */
   ease?: Easing;
+  /** Channels reached on a curve of their own (the graph editor's), in place of `ease`. */
+  curves?: Partial<Record<Channel, Curve>>;
 }
 
 /** The frames a move can hit on (both ends included), and with what. */
@@ -350,6 +371,8 @@ interface Blend {
   b: number;
   t: number;
   chs: number[];
+  /** A channel on a curve of its own: alone in its blend. */
+  curve?: Curve;
 }
 
 /** The channels `chs` (indices) at `frame`, each between its own keys, in blends that share them. */
@@ -360,8 +383,13 @@ function blends(move: Move, setters: Setters, frame: number, chs: readonly numbe
     const span = spanOf(move, setters[c], frame);
     if (!span) continue;
     const [a, b, t] = span;
+    const curve = a === b ? undefined : move.keys[b].curves?.[CHANNELS[c]];
+    if (curve) {
+      groups.push({ a, b, t, chs: [c], curve });
+      continue;
+    }
     // Most channels share their keys with the channel before.
-    const same = (g: Blend) => g.a === a && g.b === b && g.t === t;
+    const same = (g: Blend) => !g.curve && g.a === a && g.b === b && g.t === t;
     let g = last && same(last) ? last : groups.find(same);
     if (g) g.chs.push(c);
     else groups.push((g = { a, b, t, chs: [c] }));
@@ -375,6 +403,11 @@ function apply(out: Pose, move: Move, poses: readonly Pose[], g: Blend): void {
   const { a, b, t, chs } = g;
   if (a === b) {
     for (const c of chs) takeChannel(out, poses[a], c);
+    return;
+  }
+  if (g.curve) {
+    const e = alongCurve(g.curve, t);
+    for (const c of chs) blendChannel(out, poses[a], poses[b], e, "linear", c);
     return;
   }
   const kind = move.keys[b].ease ?? "smooth";
@@ -444,6 +477,7 @@ export function sampleMove(move: Move, frame: number, resolved = resolveKeys(mov
   const whole = (g: Blend): Pose => {
     const { a, b, t } = g;
     if (a === b) return resolved[a];
+    if (g.curve) return lerpPose(resolved[a], resolved[b], alongCurve(g.curve, t));
     const kind = move.keys[b].ease ?? "smooth";
     if (kind === "lead") return lerpPoseLead(resolved[a], resolved[b], t);
     return lerpPose(resolved[a], resolved[b], ease(kind, t));
@@ -494,10 +528,26 @@ export function compactKeys(move: Move, rest: Pose = REST_POSE): void {
     let prev = s[0];
     for (let x = 1; x < s.length - 1; x++) {
       const i = s[x];
-      if (same(prev, i) && same(i, s[x + 1])) clearChannel(move.keys[i].pose, ch);
-      else prev = i;
+      // The same value either side: any curve between them is flat too.
+      if (same(prev, i) && same(i, s[x + 1])) {
+        clearChannel(move.keys[i].pose, ch);
+        dropCurve(move.keys[i], ch);
+      } else prev = i;
     }
   }
+}
+
+/** Takes a channel's curve off a key (one it no longer sets). */
+export function dropCurve(key: Key, ch: Channel): void {
+  if (!key.curves?.[ch]) return;
+  delete key.curves[ch];
+  if (!Object.keys(key.curves).length) delete key.curves;
+}
+
+/** Puts a channel on a curve of its own into a key, or (null) back on the key's ease. */
+export function setCurve(key: Key, ch: Channel, curve: Curve | null): void {
+  if (!curve) return dropCurve(key, ch);
+  key.curves = { ...key.curves, [ch]: curve };
 }
 
 /** Whether the move can hit on `frame`. */
@@ -590,12 +640,16 @@ export function moveChannels(
   const sources = indices.filter((i) => channels.some((ch) => setsChannel(keys[i].pose, ch)));
   const moved = sources.map((i) => {
     const part: Partial<Pose> = {};
+    const curves: Partial<Record<Channel, Curve>> = {};
     for (const ch of channels) {
       if (!setsChannel(keys[i].pose, ch)) continue;
       copyChannel(part, keys[i].pose as Pose, ch);
       clearChannel(keys[i].pose, ch);
+      const c = keys[i].curves?.[ch];
+      if (c) curves[ch] = c;
+      dropCurve(keys[i], ch);
     }
-    return { frame: keys[i].frame + by, part, ease: keys[i].ease };
+    return { frame: keys[i].frame + by, part, ease: keys[i].ease, curves };
   });
   if (moved.some((m) => m.frame < 0 || m.frame >= move.length)) return false;
   const emptied = new Set(sources.map((i) => keys[i]).filter((k) => !Object.keys(k.pose).length));
@@ -608,6 +662,7 @@ export function moveChannels(
     }
     emptied.delete(key);
     key.pose = mergePartial(key.pose, m.part);
+    if (Object.keys(m.curves).length) key.curves = { ...key.curves, ...m.curves };
   }
   const kept = keys.filter((k) => !emptied.has(k));
   if (!kept.length) return false;
@@ -615,8 +670,15 @@ export function moveChannels(
   return true;
 }
 
+/** `pose`'s values of some channels, as a key setting just those. */
+export function pickChannels(pose: Pose, channels: readonly Channel[]): Partial<Pose> {
+  const out: Partial<Pose> = {};
+  for (const ch of channels) copyChannel(out, pose, ch);
+  return out;
+}
+
 /** `over` with what `more` sets as well; the groups merge part by part. */
-function mergePartial(over: Partial<Pose>, more: Partial<Pose>): Partial<Pose> {
+export function mergePartial(over: Partial<Pose>, more: Partial<Pose>): Partial<Pose> {
   const out: Record<string, unknown> = { ...over };
   for (const [k, v] of Object.entries(more)) {
     out[k] = isGroup(k) ? { ...(over[k] as NumberRecord), ...(v as NumberRecord) } : v;
@@ -629,6 +691,7 @@ export interface PutKey {
   frame: number;
   pose: Pose;
   ease?: Easing;
+  curves?: Key["curves"];
 }
 
 /**
@@ -649,6 +712,7 @@ export function putKeys(move: Move, put: readonly PutKey[], remove: readonly num
       frame: p.frame,
       pose: everyChannel(p.pose),
       ...(p.ease ? { ease: p.ease } : {}),
+      ...(p.curves && Object.keys(p.curves).length ? { curves: structuredClone(p.curves) } : {}),
     })),
   ].sort(byFrame);
   if (keys.length) move.keys = keys;

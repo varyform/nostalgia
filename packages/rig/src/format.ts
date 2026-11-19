@@ -1,8 +1,12 @@
 import { LIMBS, type Pose, type Target } from "./pose.ts";
 import { DEFAULT_PROPORTIONS, JOINT_NAMES, type JointName, type Proportions } from "./skeleton.ts";
 import {
+  CHANNELS,
   EASINGS,
   fromCarryOver,
+  setCurve,
+  setsChannel,
+  type Channel,
   GROUPS,
   type ActiveRange,
   type Easing,
@@ -26,9 +30,12 @@ import {
  * 4. A channel a key leaves out passes through it, from the key before
  *    that sets it to the next, rather than holding from the key before:
  *    each channel keyed on its own, so a part can run on its own timing.
+ * 5. Keys can put a channel on a curve of its own (`curves`, the graph
+ *    editor's). Nothing changes shape, but an older reader would play
+ *    such a move wrong, so it refuses it as newer instead.
  */
 export const FORMAT = "rig-editor";
-export const VERSION = 4;
+export const VERSION = 5;
 
 export interface Project {
   format: typeof FORMAT;
@@ -111,6 +118,10 @@ const MIGRATIONS: Record<number, (file: Raw) => Raw> = {
       isObject(move) ? (fromCarryOver(readMove(move)) as unknown as Raw) : move,
     );
     return { ...file, version: 4, moves };
+  },
+  4(file) {
+    // Curves are new; nothing to change.
+    return { ...file, version: 5 };
   },
 };
 
@@ -198,8 +209,19 @@ function readMove(raw: Raw): Move {
 function readKey(raw: Raw): Key {
   const key: Key = { frame: int(raw.frame, 0), pose: readPose(raw.pose) };
   if (EASINGS.includes(raw.ease as Easing)) key.ease = raw.ease as Easing;
+  if (isObject(raw.curves)) {
+    for (const [ch, c] of Object.entries(raw.curves)) {
+      // Only a channel the key sets has a curve into it; time runs forward.
+      if (!CHANNELS.includes(ch as Channel) || !setsChannel(key.pose, ch as Channel)) continue;
+      if (!Array.isArray(c) || c.length !== 4 || !c.every((v) => Number.isFinite(v))) continue;
+      const [x1, y1, x2, y2] = c as number[];
+      setCurve(key, ch as Channel, [clamp01(x1), y1, clamp01(x2), y2]);
+    }
+  }
   return key;
 }
+
+const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
 function readActive(raw: unknown, length: number): ActiveRange | undefined {
   if (!isObject(raw)) return undefined;
