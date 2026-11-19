@@ -5,6 +5,7 @@
   "dependencies": {
     "@nostalgia/audio": "workspace:*",
     "@nostalgia/game": "workspace:*",
+    "@nostalgia/gl": "workspace:*",
     "@nostalgia/input": "workspace:*",
     "@nostalgia/save": "workspace:*"
   },

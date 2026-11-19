@@ -45,6 +45,9 @@ the mechanics. `game.json` credits the original in `after` + `year`.
   `tone`, `hiss`, `fm`, `notes`, and for richer scores `sub`, `supersaw`, `pulse` and `fm(…, { options })`. Effects:
   `delay`, `distortion`, `compressor`, through `v.insert(…)` or `inserts` on a bus (balance loudness with a compressor).
 - `@nostalgia/save` — the autosave (below).
+- `@nostalgia/gl` — the 3D games' WebGL2 engine: `createGL` (meshes, instances, glass, shadows, mist, thermal, points;
+  `destroy()` keeps the context), mesh parts, height-field chunks; DOM-free `/noise`, `/math`, `/mesh`, `/terrain` for
+  sims and tools; `/ui` for the 2D HUD.
 - A change a game needs in a package goes in the package (with tests), not in a local copy.
 
 ## Game rules

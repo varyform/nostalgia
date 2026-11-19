@@ -18,6 +18,9 @@ importers:
       '@nostalgia/game':
         specifier: workspace:*
         version: link:packages/game
+      '@nostalgia/gl':
+        specifier: workspace:*
+        version: link:packages/gl
       '@nostalgia/input':
         specifier: workspace:*
         version: link:packages/input
@@ -41,6 +44,12 @@ importers:
   packages/audio: {}
 
   packages/game: {}
+
+  packages/gl:
+    dependencies:
+      '@nostalgia/input':
+        specifier: workspace:*
+        version: link:../input
 
   packages/input: {}
 

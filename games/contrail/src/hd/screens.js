@@ -6,7 +6,7 @@ import { KINDS, WEAPON_NAME } from '../sim.js';
 import { THEATRES } from '../theatres.js';
 import { HALF, createWorld } from '../world.js';
 import { mapImage } from './terrain.js';
-import { COL, H, W, fmt } from './ui.js';
+import { COL, H, W, fmt } from '@nostalgia/gl/ui';
 
 const LABEL = { continue: 'CONTINUE', new: 'NEW CAMPAIGN', missions: 'MISSION SELECT', scores: 'HIGH SCORES', exit: 'EXIT' };
 const PAUSE = { resume: 'RESUME', end: 'END SORTIE', restart: 'RESTART SORTIE', quit: 'QUIT TO TITLE' };

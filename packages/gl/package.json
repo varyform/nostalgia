@@ -1,0 +1,17 @@
+{
+  "name": "@nostalgia/gl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./math": "./src/math.ts",
+    "./mesh": "./src/mesh.ts",
+    "./noise": "./src/noise.ts",
+    "./terrain": "./src/terrain.ts",
+    "./ui": "./src/ui.ts"
+  },
+  "dependencies": {
+    "@nostalgia/input": "workspace:*"
+  }
+}

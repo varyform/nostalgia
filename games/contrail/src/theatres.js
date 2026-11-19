@@ -3,7 +3,7 @@
 // Each is a height function of (x, z) (world.js samples it on its grid), the level of its
 // water, the height of the ground beyond the map's edge, its sky, and its named sites: flat
 // pads for bases and targets, and runways. Places and factions are invented for Contrail.
-import { fbm, polyDist, ridged, smooth } from './noise.js';
+import { fbm, polyDist, ridged, smooth } from '@nostalgia/gl/noise';
 
 // ---------- Glasswater Keys: islands in a warm sea ----------
 const ISLANDS = [

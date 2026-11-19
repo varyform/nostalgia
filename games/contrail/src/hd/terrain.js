@@ -4,12 +4,10 @@
 // lie on it. Everything is cut into 16 × 16-cell chunks so the view can skip what's behind it.
 //
 //   const T = buildTerrain(world);   // { data, chunks: [{ first, count, c, r }], decals: { data, count } }
-import { hash2 } from '../noise.js';
+import { box, builder, cyl, frustum, gridChunks, hexRGB } from '@nostalgia/gl';
+import { hash2 } from '@nostalgia/gl/noise';
 import { CELL, HALF, N, V } from '../world.js';
-import { hexRGB } from './gl.js';
-import { box, builder, cyl, frustum } from './meshes.js';
 
-const C = 16; // cells per chunk side
 const rgb = h => hexRGB(h).map(v => v * 255);
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const clamp01 = t => Math.min(1, Math.max(0, t));
@@ -73,7 +71,7 @@ export function buildTerrain(W) {
   }
   const waterCol = depth => round(mix(col.shallow, col.deep, clamp01(Math.sqrt(Math.max(0, depth) / 70))));
 
-  const B = builder(1 << 20), chunks = [];
+  const B = builder(1 << 20);
   const P = (i, j) => [-HALF + i * CELL, h[j * V + i], -HALF + j * CELL];
   const wetV = (i, j) => raw[j * V + i] < water + 0.5;
   const face = (pa, pb, pc, wa, wb, wc, ia, ja, ib, jb, ic, jc, n) => {
@@ -98,32 +96,27 @@ export function buildTerrain(W) {
     if (T.road) { /* keep the road clear */ }
     return false;
   };
-  for (let cj = 0; cj < N / C; cj++) for (let ci = 0; ci < N / C; ci++) {
-    const first = B.n;
-    let lo = Infinity, hi = -Infinity;
-    for (let j = cj * C; j < cj * C + C; j++) for (let i = ci * C; i < ci * C + C; i++) {
-      const a = P(i, j), b = P(i + 1, j), c = P(i, j + 1), d = P(i + 1, j + 1);
+  const chunks = gridChunks(B, {
+    n: N, chunk: 16, origin: -HALF, size: CELL, point: P,
+    cell(B, i, j, a, b, c, d) {
       const wa = wetV(i, j), wb = wetV(i + 1, j), wc = wetV(i, j + 1), wd = wetV(i + 1, j + 1);
       const n = hash2(i, j, T.seed);
       // the split along a–d, as heightAt() has it
       face(a, d, b, wa, wd, wb, i, j, i + 1, j + 1, i + 1, j, n);
       face(a, c, d, wa, wc, wd, i, j, i, j + 1, i + 1, j + 1, hash2(j, i, T.seed));
-      for (const p of [a, b, c, d]) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); }
       // a prop or two
       const pr = hash2(i * 3 + 1, j * 7 + 2, T.seed + 9);
       const x = a[0] + hash2(i, j * 5, 3) * CELL, z = a[2] + hash2(i * 5, j, 4) * CELL;
-      if (wa || wb || wc || wd) continue;
+      if (wa || wb || wc || wd) return;
       const y = W.heightAt(x, z), e = (y - water) / span;
       const dens = props === 'palm' ? (y - water > 4 && e < 0.3 ? 0.22 : 0.03) : props === 'pine' ? (e > 0.02 && e < 0.4 ? 0.3 : 0) : 0.06;
-      if (pr > dens || near(x, z)) continue;
+      if (pr > dens || near(x, z)) return;
       const s = 0.9 + hash2(j, i, 11) * 0.7, k = hash2(i + 7, j + 3, 5);
       if (props === 'palm') { if (e < 0.3) palm(B, x, y, z, s, k); else rock(B, x, y, z, s, k, rockCol); }
       else if (props === 'pine') pine(B, x, y, z, s, k);
       else rock(B, x, y, z, s * (1 + k), k, k > 0.5 ? L.high : L.rock);
-    }
-    const cx = -HALF + (ci + 0.5) * C * CELL, cz = -HALF + (cj + 0.5) * C * CELL;
-    chunks.push({ first, count: B.n - first, c: [cx, (lo + hi) / 2, cz], r: Math.hypot(C * CELL * 0.71, (hi - lo) / 2 + 30) });
-  }
+    },
+  });
   // buildings: the home base and the towns (static, never targets)
   const first = B.n;
   const home = W.site('home');

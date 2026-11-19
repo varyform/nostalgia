@@ -1,4 +1,4 @@
-// The HD renderer. The world is WebGL2 (gl.js) on the page's #gl canvas: the theatre's terrain
+// The HD renderer. The world is WebGL2 (@nostalgia/gl) on the page's #gl canvas: the theatre's terrain
 // and props (terrain.js), every aircraft, ground unit and store from shared meshes (meshes.js),
 // and the fire, smoke, tracers, flares and vapour as soft points. The HUD, the cockpit's
 // displays and every screen are 2D vectors on the transparent #c canvas over it (hud.js,
@@ -9,12 +9,12 @@
 import { fitWide } from '@nostalgia/game/runtime';
 import { createWorld } from '../world.js';
 import { KINDS, add, cross, dist, dot, len, mul, norm, sub } from '../sim.js';
-import { createGL, modelOf } from './gl.js';
+import { createGL, modelOf } from '@nostalgia/gl';
+import { COL, H, W, createUI } from '@nostalgia/gl/ui';
 import { drawHud } from './hud.js';
 import { buildMeshes } from './meshes.js';
 import { drawScreen, screenHit } from './screens.js';
 import { buildTerrain } from './terrain.js';
-import { COL, H, W, createUI } from './ui.js';
 
 const UP = [0, 1, 0];
 const MAX_P = 3000;

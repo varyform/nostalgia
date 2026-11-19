@@ -5,7 +5,7 @@
 import { MISSIONS } from '../missions.js';
 import { BULLET_V, G, IR_CONE, KINDS, RADAR_RANGE, ROCKET_V, STALL, WEAPONS, WEAPON_NAME, add, bankOf, dirOf, dist, headingOf, mul, norm, predictBomb, sub } from '../sim.js';
 import { pads, THROTTLE_MAX } from '../touch.js';
-import { COL, H, W, fmt } from './ui.js';
+import { COL, H, W, fmt } from '@nostalgia/gl/ui';
 
 const KT = 1.944, FT = 3.281;
 const TAU = Math.PI * 2;

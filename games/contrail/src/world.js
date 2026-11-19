@@ -9,10 +9,11 @@
 //   w.site('home') → { x, z, y, … }           // a named place from theatres.js
 //
 // World axes: x east, y up, z south (so north is −z, heading 0). Metres.
-import { lerp, smooth } from './noise.js';
+import { lerp, smooth } from '@nostalgia/gl/noise';
+import { gridHeight } from '@nostalgia/gl/terrain';
 import { THEATRES } from './theatres.js';
 
-export { fbm, lerp, polyAt, polyDist, polyLen, ridged, smooth } from './noise.js';
+export { fbm, lerp, polyAt, polyDist, polyLen, ridged, smooth } from '@nostalgia/gl/noise';
 
 export const CELL = 150, N = 192, SIZE = CELL * N, HALF = SIZE / 2, V = N + 1;
 
@@ -59,14 +60,9 @@ export function createWorld(index) {
     raw[k] = y;
     h[k] = Math.max(y, water);
   }
-  function heightAt(x, z) {
-    const gx = (x + HALF) / CELL, gz = (z + HALF) / CELL;
-    if (gx < 0 || gz < 0 || gx >= N || gz >= N) return Math.max(T.edge, water);
-    const i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j, k = j * V + i;
-    const a = h[k], b = h[k + 1], c = h[k + V], d = h[k + V + 1];
-    // the cell's two triangles split along a–d, as the mesh is
-    return fx > fz ? a + (b - a) * fx + (d - b) * fz : a + (d - c) * fx + (c - a) * fz;
-  }
+  // the surface the terrain mesh draws (its cells split along a–d); the theatre's edge beyond the grid
+  const edge = Math.max(T.edge, water);
+  const heightAt = (x, z) => gridHeight(h, N, -HALF, CELL, x, z, edge);
   /** is (x, z) over water (the raw ground is under the water line)? */
   const wet = (x, z) => {
     const i = Math.max(0, Math.min(N, Math.round((x + HALF) / CELL))), j = Math.max(0, Math.min(N, Math.round((z + HALF) / CELL)));
