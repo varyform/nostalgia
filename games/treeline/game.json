@@ -1,0 +1,66 @@
+{
+  "title": "Treeline",
+  "exe": "TREELINE.EXE",
+  "after": "LHX Attack Chopper",
+  "year": 1990,
+  "genre": "Combat flight",
+  "tags": ["Simulation", "Helicopter", "3D"],
+  "blurb": "Fly the Gadfly attack helicopter low through twelve missions for the Marchland Guard: strikes, convoy ambushes, escorts, SAM hunts and rescues over a jungle delta, an autumn vale and a misty mountain pass. Hills and trees hide you.",
+  "facts": [
+    ["Theatres", "Jungle delta, autumn vale, mountain pass"],
+    ["Missions", "12: strike, ambush, escort, SAM hunt, rescue"],
+    ["Arms", "Chin gun, rockets, guided ATMs, AAMs, flares"],
+    ["Input", "Keyboard, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "pitchDown": { "keys": ["ArrowUp"], "pad": ["LStickUp"] },
+      "pitchUp": { "keys": ["ArrowDown"], "pad": ["LStickDown"] },
+      "rollLeft": { "keys": ["ArrowLeft"], "pad": ["LStickLeft"] },
+      "rollRight": { "keys": ["ArrowRight"], "pad": ["LStickRight"] },
+      "yawLeft": { "keys": ["KeyA"], "pad": ["L1", "RStickLeft"] },
+      "yawRight": { "keys": ["KeyD"], "pad": ["R1", "RStickRight"] },
+      "collUp": { "keys": ["KeyW"], "pad": ["R2", "RStickUp"] },
+      "collDown": { "keys": ["KeyS"], "pad": ["L2", "RStickDown"] },
+      "gun": { "keys": ["Space"], "pad": ["South"], "touch": "GUN" },
+      "fire": { "keys": ["KeyX", "Enter"], "pad": ["East"], "touch": "FIRE" },
+      "weapon": { "keys": ["KeyC"], "pad": ["West"], "touch": "WPN" },
+      "target": { "keys": ["KeyT", "Tab"], "pad": ["North"], "touch": "TGT" },
+      "decoy": { "keys": ["KeyZ"], "pad": ["Down"], "touch": "FLARE" },
+      "hover": { "keys": ["KeyH"], "pad": ["Left"], "touch": "HOVER" },
+      "assist": { "keys": ["KeyJ"], "pad": ["Right"] },
+      "view": { "keys": ["KeyV"], "pad": ["Up"], "touch": "VIEW" },
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"], "touch": "II" },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"] },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "cyclic": { "keys": ["Arrows"], "pad": ["LStick"], "touch": "Stick" },
+      "collective": { "keys": ["WS"], "pad": ["R2", "L2"], "touch": "Slider" },
+      "pedals": { "keys": ["AD"], "pad": ["L1", "R1"] },
+      "menu": { "keys": ["ArrowsV"], "pad": ["DpadV"] }
+    }
+  },
+  "controls": [
+    ["cyclic", "Cyclic: speed and turns (up is forward)"],
+    ["collective", "Collective: climb and sink"],
+    ["gun", "Chin gun, slaved to the target"],
+    ["fire", "Fire rockets or missile (C: next store)"],
+    ["target", "Next target (V: view, H: hover)"],
+    ["decoy", "Flares and chaff"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · 16:9 · flat-shaded 3D",
+      "note": "Flat-shaded WebGL terrain, forests and helicopters with a cockpit HUD. Saves scores, progress and a checkpoint."
+    }
+  ]
+}

@@ -7,21 +7,22 @@ no external assets. `dist/index.html` is the launcher, a DOS-style menu with liv
 
 ## Games
 
-| Source           | Game     | In the spirit of       | Compiled                                                   |
-| ---------------- | -------- | ---------------------- | ---------------------------------------------------------- |
-| `games/keepsake` | Keepsake | Popeye (1982)          | `dist/keepsake.html`                                       |
-| `games/brimful`  | Brimful  | Tapper (1983)          | `dist/brimful-cga.html` (CGA), `dist/brimful-hd.html` (HD) |
-| `games/glimmer`  | Glimmer  | Lode Runner (1983)     | `dist/glimmer.html`                                        |
-| `games/quarry`   | Quarry   | Digger (1983)          | `dist/quarry-cga.html` (CGA), `dist/quarry-hd.html` (HD)   |
-| `games/dewdrop`  | Dewdrop  | Nuts & Milk (1984)     | `dist/dewdrop.html`                                        |
-| `games/polder`   | Polder   | Xonix (1984)           | `dist/polder.html`                                         |
-| `games/skyhook`  | Skyhook  | Striker (1985)         | `dist/skyhook-cga.html` (CGA), `dist/skyhook-hd.html` (HD) |
-| `games/spindle`  | Spindle  | Nebulus (1987)         | `dist/spindle.html`                                        |
-| `games/dropzone` | Dropzone | Airborne Ranger (1988) | `dist/dropzone.html`                                       |
-| `games/contrail` | Contrail | F29 Retaliator (1989)  | `dist/contrail.html`                                       |
-| `games/barrage`  | Barrage  | Scorched Earth (1991)  | `dist/barrage.html`                                        |
-| `games/triform`  | Triform  | Metal Mutant (1991)    | `dist/triform-vga.html` (VGA), `dist/triform-hd.html` (HD) |
-| `games/quintet`  | Quintet  | Color Lines (1992)     | `dist/quintet.html`                                        |
+| Source           | Game     | In the spirit of          | Compiled                                                   |
+| ---------------- | -------- | ------------------------- | ---------------------------------------------------------- |
+| `games/keepsake` | Keepsake | Popeye (1982)             | `dist/keepsake.html`                                       |
+| `games/brimful`  | Brimful  | Tapper (1983)             | `dist/brimful-cga.html` (CGA), `dist/brimful-hd.html` (HD) |
+| `games/glimmer`  | Glimmer  | Lode Runner (1983)        | `dist/glimmer.html`                                        |
+| `games/quarry`   | Quarry   | Digger (1983)             | `dist/quarry-cga.html` (CGA), `dist/quarry-hd.html` (HD)   |
+| `games/dewdrop`  | Dewdrop  | Nuts & Milk (1984)        | `dist/dewdrop.html`                                        |
+| `games/polder`   | Polder   | Xonix (1984)              | `dist/polder.html`                                         |
+| `games/skyhook`  | Skyhook  | Striker (1985)            | `dist/skyhook-cga.html` (CGA), `dist/skyhook-hd.html` (HD) |
+| `games/spindle`  | Spindle  | Nebulus (1987)            | `dist/spindle.html`                                        |
+| `games/dropzone` | Dropzone | Airborne Ranger (1988)    | `dist/dropzone.html`                                       |
+| `games/contrail` | Contrail | F29 Retaliator (1989)     | `dist/contrail.html`                                       |
+| `games/treeline` | Treeline | LHX Attack Chopper (1990) | `dist/treeline.html`                                       |
+| `games/barrage`  | Barrage  | Scorched Earth (1991)     | `dist/barrage.html`                                        |
+| `games/triform`  | Triform  | Metal Mutant (1991)       | `dist/triform-vga.html` (VGA), `dist/triform-hd.html` (HD) |
+| `games/quintet`  | Quintet  | Color Lines (1992)        | `dist/quintet.html`                                        |
 
 ## Play
 
@@ -54,6 +55,7 @@ selects, A / ✕ runs, and the key hints turn into the pad's buttons.
 | `packages/audio/` | `@nostalgia/audio`, the shared sound engine (below)        |
 | `packages/save/`  | `@nostalgia/save`, the autosave behind CONTINUE (below)    |
 | `packages/game/`  | `@nostalgia/game`, the game folder contract (below)        |
+| `packages/gl/`    | `@nostalgia/gl`, the WebGL2 engine of the 3D games (below) |
 | `dist/`           | Compiled pages, committed: one HTML file per game version  |
 
 ## Develop
@@ -166,6 +168,30 @@ autosave.save({ level: 4, score: 12340, lives: 2 }, 'Level 5 · 12,340'); // at 
 const saved = autosave.load(); // { state, label, at } or null → CONTINUE  Level 5 · 12,340  (savedAgo(saved.at))
 autosave.clear(); // game over, or the game beaten
 ```
+
+## 3D: `@nostalgia/gl`
+
+The 3D games (Contrail, Treeline) draw with one small WebGL2 engine: flat-shaded low-poly meshes lit by one sun,
+exponential fog into a gradient sky, soft round particles, instanced props (forests of thousands of trees, faded out
+by distance, two LODs cross-fading), translucent meshes (rotor discs, glass), ground shadows (a mesh flattened onto the
+terrain, or a soft blob), height mist and a thermal view. Its pure helpers — matrices, mesh parts, height-field chunks,
+instance data, value noise — import in Node with no DOM, so sims and tools share them.
+
+```js
+import { box, builder, createGL, modelOf } from '@nostalgia/gl';
+import { fbm } from '@nostalgia/gl/noise'; // DOM-free: also /math, /mesh, /terrain
+
+const R = createGL(canvas, { antialias: !demo, stencil: true }); // null without WebGL2
+const B = builder();
+box(B, { at: [0, 1, 0] }, [2, 2, 2], '#c8c2b4');
+const buf = R.buffer(B.data()); // the mesh is the range [0, B.n]
+R.frame(cam, sky); // each frame: clear and sky, then opaque, shadows, translucent, points
+R.drawMesh(buf, [0, B.n], modelOf(pos, forward, up));
+```
+
+`destroy()` frees only the engine's own objects and keeps the context: the launcher turns a demo into the game on the
+same canvas. `@nostalgia/gl/ui` is the 2D HUD helper over the GL canvas. The API is documented in
+`packages/gl/src/index.ts`.
 
 ## Adding a game
 
