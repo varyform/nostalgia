@@ -184,7 +184,7 @@ export const autoMakeup = (threshold: number, ratio: number) => (-threshold * (1
 // The DSP, in the AudioWorkletGlobalScope: no imports, nothing from this module's scope. It
 // reads the mean square (an RMS level, so drums' peaks don't set it off as the browser's
 // peak-reading compressor does), puts it through a soft-knee curve and smooths the gain in dB.
-function registerCompressor() {
+function registerWorklets() {
   const PARAMS: [string, number][] = [
     ['thresholdDb', -24],
     ['kneeDb', 6],
@@ -237,20 +237,56 @@ function registerCompressor() {
     }
   }
   registerProcessor('nostalgia-compressor', Compressor);
+
+  // The limiter: a peak follower that turns down at once (no overshoot, no look-ahead) and
+  // recovers over `release`; no makeup gain, so below the ceiling the sound is untouched.
+  class Limiter extends AudioWorkletProcessor {
+    static get parameterDescriptors() {
+      return [
+        { name: 'ceiling', defaultValue: 0.89, automationRate: 'k-rate' },
+        { name: 'release', defaultValue: 0.1, automationRate: 'k-rate' },
+      ];
+    }
+    declare g: number;
+    constructor() {
+      super();
+      this.g = 1;
+    }
+    process(inputs: Float32Array[][], outputs: Float32Array[][], p: Record<string, Float32Array>) {
+      const input = inputs[0],
+        output = outputs[0],
+        nch = input.length;
+      if (!nch) return true;
+      const n = input[0].length,
+        ceiling = p.ceiling[0],
+        kr = 1 - Math.exp(-1 / (Math.max(p.release[0], 1e-4) * sampleRate));
+      let g = this.g;
+      for (let i = 0; i < n; i++) {
+        let peak = 0;
+        for (let c = 0; c < nch; c++) peak = Math.max(peak, Math.abs(input[c][i]));
+        const target = peak > ceiling ? ceiling / peak : 1;
+        g = target < g ? target : g + (target - g) * kr;
+        for (let c = 0; c < output.length; c++) output[c][i] = input[Math.min(c, nch - 1)][i] * g;
+      }
+      this.g = g;
+      return true;
+    }
+  }
+  registerProcessor('nostalgia-limiter', Limiter);
 }
 declare const sampleRate: number;
 declare function registerProcessor(name: string, processor: unknown): void;
 declare class AudioWorkletProcessor {}
 
 const modules = new WeakMap<BaseAudioContext, Promise<void>>();
-function loadCompressor(ac: BaseAudioContext) {
+function loadWorklets(ac: BaseAudioContext) {
   let m = modules.get(ac);
   if (!m) {
     if (!ac.audioWorklet || typeof AudioWorkletNode === 'undefined') m = Promise.reject(new Error('no AudioWorklet'));
     else {
       // a data: URL, not a Blob one: a page opened from a file has an opaque origin, and a
       // worklet from a blob:null URL fails to load there
-      const code = `(${registerCompressor.toString()})();`;
+      const code = `(${registerWorklets.toString()})();`;
       m = ac.audioWorklet.addModule('data:text/javascript,' + encodeURIComponent(code));
     }
     modules.set(ac, m);
@@ -278,7 +314,7 @@ export function compressor(ac: BaseAudioContext, o: CompressorOptions = {}): Com
     input.connect(node);
     after.connect(output);
   };
-  const ready = loadCompressor(ac).then(
+  const ready = loadWorklets(ac).then(
     () => {
       const node = new AudioWorkletNode(ac, 'nostalgia-compressor', { outputChannelCount: [2] });
       const set = (name: string, v: number) => (node.parameters.get(name)!.value = v);
@@ -301,6 +337,51 @@ export function compressor(ac: BaseAudioContext, o: CompressorOptions = {}): Com
       up.gain.value = 10 ** (makeup / 20);
       c.connect(up);
       swap(c, up);
+    },
+  );
+  return { input, output, ready };
+}
+
+// ---------- limiter ----------
+export interface LimiterOptions {
+  /** dB of full scale nothing goes over (default -1). */
+  ceiling?: number;
+  /** Seconds to come back up after a peak (default 0.1). */
+  release?: number;
+}
+
+/**
+ * A peak limiter for the end of a mix (`inserts: { master: ac => limiter(ac) }`): it only ever
+ * turns down, and only what would go over the ceiling, so it adds no makeup gain and the mix's
+ * level stays what its gains say. An AudioWorklet like the compressor (passing the sound
+ * through until it loads); where worklets can't run, the browser's compressor at its hardest
+ * stands in, which does add some gain of its own.
+ */
+export function limiter(ac: BaseAudioContext, o: LimiterOptions = {}): CompressorFx {
+  const ceiling = o.ceiling ?? -1,
+    release = o.release ?? 0.1;
+  const input = ac.createGain(),
+    output = ac.createGain();
+  input.connect(output);
+  const swap = (node: AudioNode) => {
+    input.disconnect();
+    input.connect(node).connect(output);
+  };
+  const ready = loadWorklets(ac).then(
+    () => {
+      const node = new AudioWorkletNode(ac, 'nostalgia-limiter', { outputChannelCount: [2] });
+      node.parameters.get('ceiling')!.value = 10 ** (ceiling / 20);
+      node.parameters.get('release')!.value = release;
+      swap(node);
+    },
+    () => {
+      const c = ac.createDynamicsCompressor();
+      c.threshold.value = ceiling;
+      c.knee.value = 0;
+      c.ratio.value = 20;
+      c.attack.value = 0.001;
+      c.release.value = release;
+      swap(c);
     },
   );
   return { input, output, ready };

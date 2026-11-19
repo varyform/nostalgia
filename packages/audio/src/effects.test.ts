@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test';
-import { autoMakeup, compressor, createSynth, delay, distortion, type SynthOptions, type Voices } from './index.ts';
+import {
+  autoMakeup,
+  compressor,
+  createSynth,
+  delay,
+  distortion,
+  limiter,
+  type SynthOptions,
+  type Voices,
+} from './index.ts';
 import { foldCurve } from './effects.ts';
 import { createRecorder, type Recorder } from './mock.ts';
 
@@ -113,5 +122,89 @@ describe('inserts', () => {
     expect(log).toContain(`${id(voices.bus.music)}.connect(${id(fx.input)})`);
     expect(log).toContain(`${id(fx.output)}.connect(${id(voices.bus.master)})`);
     expect(log).not.toContain(`${id(voices.bus.music)}.connect(${id(voices.bus.master)})`);
+  });
+});
+
+describe('limiter', () => {
+  it('passes the sound through, then a hard browser compressor stands in where worklets cannot run', async () => {
+    const ac = new AudioContext();
+    const fx = limiter(ac, { ceiling: -3 });
+    expect(rec.log).toContain(`${id(fx.input)}.connect(${id(fx.output)})`);
+    await fx.ready;
+    const [c] = made(rec.log, 'createDynamicsCompressor');
+    expect(rec.log).toContain(`${c}.threshold=-3`);
+    expect(rec.log).toContain(`${c}.ratio=20`);
+    expect(rec.log).toContain(`${c}.connect(${id(fx.output)})`);
+  });
+});
+
+describe('track gains', () => {
+  type T = { bpm: number; gain?: number };
+  const synth = (tracks: Record<string, T>, extra = {}) =>
+    createSynth<T>({
+      seed: 1,
+      levels: { master: 0.5, music: 0.3, sfx: 0.7 },
+      tracks,
+      ...extra,
+      arrange: () => ({ step() {}, effects: {} }),
+    });
+
+  it('a level after the music inserts, which the music glides to as a track starts', () => {
+    let fx!: ReturnType<typeof delay>;
+    const audio = synth(
+      { a: { bpm: 120, gain: 2 }, b: { bpm: 120 } },
+      { inserts: { music: (ac: AudioContext) => (fx = delay(ac)) } },
+    );
+    audio.music('a');
+    audio.unlock();
+    const post = rec.log
+      .find(l => l.startsWith(`${id(fx.output)}.connect(`))!
+      .slice(`${id(fx.output)}.connect(`.length, -1);
+    expect(rec.log).toContain(`${post}.gain=2`);
+    rec.time = 1;
+    audio.music('b');
+    expect(rec.log.at(-1)).toMatch(new RegExp(`^${post}\\.gain\\.setTargetAtTime\\(1,`));
+  });
+
+  it('no extra node when no track has a gain', () => {
+    const audio = synth({ a: { bpm: 120 } });
+    const from = rec.log.length;
+    audio.unlock();
+    expect(made(rec.log.slice(from), 'createGain')).toHaveLength(3); // master, music, sfx
+  });
+});
+
+describe('loops', () => {
+  it('built when wanted, stopped when not, and rebuilt on a new context while wanted', () => {
+    let builds = 0,
+      stops = 0;
+    const { voices, audio } = run(() => {});
+    const engine = voices.loop(() => {
+      builds++;
+      return { stop: () => stops++ };
+    });
+    expect(engine.on()).not.toBeNull();
+    expect(engine.live).toBe(engine.live);
+    expect(builds).toBe(1);
+    audio.destroy();
+    expect(engine.live).toBeNull();
+    audio.unlock();
+    expect(engine.live).not.toBeNull(); // still wanted: on the new context
+    expect(builds).toBe(2);
+    engine.off();
+    expect(stops).toBe(1);
+    expect(engine.live).toBeNull();
+  });
+
+  it('nothing before unlock()', () => {
+    const audio = createSynth({
+      seed: 1,
+      levels: { master: 1, music: 1, sfx: 1 },
+      arrange: v => ({ effects: {}, methods: { v } }),
+    });
+    const l = audio.v.loop(() => ({ stop() {} }));
+    expect(l.on()).toBeNull();
+    audio.unlock();
+    expect(l.live).not.toBeNull();
   });
 });

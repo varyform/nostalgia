@@ -8,11 +8,32 @@ import { midi } from './notes.ts';
 
 /** An oscillator shape, or a pulse duty cycle (0.125, 0.25, 0.5) when the synth has `pulse`. */
 export type Wave = OscillatorType | number;
+/**
+ * A track: its tempo, and optionally its level, applied after the music bus's inserts (so a
+ * compressor there evens the tracks out and the level then sets each exactly); the music
+ * glides to it as the track starts. Tracks without one play at 1.
+ */
+export interface Track {
+  bpm: number;
+  gain?: number;
+}
 export type Bus = 'music' | 'sfx';
 /** Effects a score's voices can play into (v.insert()), feeding a bus or another insert. */
 export interface Insert<F extends Fx = Fx> {
   /** The effect on the current context: null before unlock(), built on first use. */
   readonly fx: F | null;
+}
+/**
+ * A continuous sound (an engine, a rotor, an alarm) on whatever context there is: built when
+ * first wanted, and again on the new context after destroy() + unlock() while still wanted.
+ */
+export interface Loop<L> {
+  /** Want it: its graph (built now if need be), or null before unlock(). */
+  on(): L | null;
+  /** Don't: its stop() runs (if it's on the current context) and it's forgotten. */
+  off(): void;
+  /** Its graph while wanted, on the current context (rebuilt there if that changed); else null. */
+  readonly live: L | null;
 }
 /** Where a voice plays: a bus, an insert, or a node of the score's own. */
 export type Target = Bus | Insert | AudioNode;
@@ -83,6 +104,8 @@ export interface Voices {
    * the context when first played into, and feeds `to` (default 'music').
    */
   insert: <F extends Fx>(build: FxBuilder<F>, to?: Target) => Insert<F>;
+  /** A continuous sound kept on the current context (see Loop); build() makes its graph. */
+  loop: <L extends { stop(): void }>(build: (ac: AudioContext) => L) => Loop<L>;
   /** Keep the music quiet until context time `until` (a jingle has the floor); it then resumes. */
   hold: (until: number) => void;
 }
@@ -98,7 +121,7 @@ export interface Arrangement<T, M> {
   methods?: M;
 }
 
-export interface SynthOptions<T extends { bpm: number }, M> {
+export interface SynthOptions<T extends Track, M> {
   /** Start with sound on (default true). */
   on?: boolean;
   /** Bus gains; master is the "on" level setOn() ramps to. */
@@ -107,7 +130,8 @@ export interface SynthOptions<T extends { bpm: number }, M> {
   seed: number;
   /** Length of the noise buffer hiss() loops, seconds (default 1). */
   noiseLength?: number;
-  /** The music; a synth without tracks plays effects only and runs no sequencer. */
+  /** The music; a synth without tracks plays effects only and runs no sequencer. A track's
+   * `gain`, if any has one, is its level after the music bus's inserts. */
   tracks?: Record<string, T>;
   arrange: (v: Voices) => Arrangement<T, M>;
   /** tone()'s default attack, seconds (default 0.004); 0 starts every tone at its peak. */
@@ -161,14 +185,16 @@ const TICK = 40; // ms between scheduler runs
 const AHEAD = 0.2; // seconds scheduled ahead of the clock
 const NEXT = 0.08; // a new track's first step, from now
 
-export function createSynth<T extends { bpm: number }, M extends object = object>(opts: SynthOptions<T, M>): Synth & M {
+export function createSynth<T extends Track, M extends object = object>(opts: SynthOptions<T, M>): Synth & M {
   const { levels, seed, tracks = {}, attack = 0.004, pulse = false, speaker = false, echo = false } = opts;
   const { noiseLength = 1, floor = 0.0001, tail = 0.05, lead = 0.005, compressor = false } = opts;
   const startDelay = opts.startDelay ?? 0.05;
   const sequenced = Object.keys(tracks).length > 0;
+  const trackGains = Object.values(tracks).some(t => t.gain !== undefined);
   let ac: AudioContext | null = null,
     master: GainNode | null = null,
     musicBus: GainNode | null = null,
+    musicOut: GainNode | null = null,
     sfxBus: GainNode | null = null,
     noise: AudioBuffer | null = null;
   const waves: Record<number, PeriodicWave> = {};
@@ -223,7 +249,13 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     if (!speaker) into('master', master, out);
     musicBus = ac.createGain();
     musicBus.gain.value = levels.music;
-    into('music', musicBus, master);
+    if (trackGains) {
+      // each track's own level, after the inserts (a compressor there evens them out first)
+      musicOut = ac.createGain();
+      musicOut.gain.value = track?.gain ?? 1;
+      musicOut.connect(master);
+    }
+    into('music', musicBus, musicOut ?? master);
     sfxBus = ac.createGain();
     sfxBus.gain.value = levels.sfx;
     into('sfx', sfxBus, master);
@@ -296,6 +328,29 @@ export function createSynth<T extends { bpm: number }, M extends object = object
       },
     };
     return ins;
+  }
+  function loop<L extends { stop(): void }>(build: (ac: AudioContext) => L): Loop<L> {
+    let want = false,
+      made: { ac: AudioContext; it: L } | null = null;
+    const live = () => {
+      if (!want || !ac) return null;
+      if (made?.ac !== ac) made = { ac, it: build(ac) };
+      return made.it;
+    };
+    return {
+      on() {
+        want = true;
+        return live();
+      },
+      off() {
+        want = false;
+        if (made && made.ac === ac && ac.state !== 'closed') made.it.stop();
+        made = null;
+      },
+      get live() {
+        return live();
+      },
+    };
   }
   const busNode = (b: Target): AudioNode =>
     b === 'music' ? musicBus! : b === 'sfx' ? sfxBus! : 'fx' in b ? b.fx!.input : b;
@@ -446,6 +501,7 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     pulse: pulseVoice,
     notes,
     insert,
+    loop,
     hold,
   };
   const { step, effects, methods } = opts.arrange(voices);
@@ -457,6 +513,7 @@ export function createSynth<T extends { bpm: number }, M extends object = object
     track = name ? tracks[name] : null;
     i = 0;
     if (ac) nextT = Math.max(ac.currentTime + NEXT, holdUntil);
+    if (ac && musicOut && track) musicOut.gain.setTargetAtTime(track.gain ?? 1, nextT, 0.15);
   }
   function schedule() {
     if (!ac || !track) return;

@@ -55,8 +55,13 @@
  *   delay(ac, { time, feedback, wet, dry, pan, cut })          a mono echo beside the dry sound
  *   distortion(ac, { amount, shape, ceiling, mix, gain })      a hard clipper (shape 0) or a wavefolder
  *   compressor(ac, { threshold, ratio, knee, attack, release, makeup })   RMS, soft knee; makeup 'auto'
+ *   limiter(ac, { ceiling = -1, release = 0.1 })   a peak limiter for master: only turns down, no makeup
  * Voices play into them through v.insert(ac => fx or [fx, …], to = 'music'), passed as their
- * bus; a whole bus through the synth's `inserts: { music, sfx, master }`.
+ * bus; a whole bus through the synth's `inserts: { music, sfx, master }`. A track's `gain` is its
+ * level after the music bus's inserts.
+ *
+ * Continuous sounds (an engine, a rotor, an alarm): v.loop(ac => graph with stop()) → on() / off()
+ * / live, kept on the current context and rebuilt on a new one after destroy() + unlock().
  *
  * An attack of 0 starts a voice at its peak and only decays: a pluck, a blip.
  *
@@ -77,9 +82,11 @@ export {
   type FxBuilder,
   type Insert,
   type Levels,
+  type Loop,
   type Synth,
   type SynthOptions,
   type Target,
+  type Track,
   type Voices,
   type Wave,
 } from './synth.ts';
@@ -89,12 +96,14 @@ export {
   compressor,
   delay,
   distortion,
+  limiter,
   type CompressorFx,
   type CompressorOptions,
   type DelayFx,
   type DelayOptions,
   type DistortionOptions,
   type Fx,
+  type LimiterOptions,
 } from './effects.ts';
 export {
   adsr,
