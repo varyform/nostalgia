@@ -143,6 +143,7 @@ export type Channel =
   | "yaw"
   | "pitch"
   | "roll"
+  | "hipTilt"
   | LimbName
   | GroupChannel;
 
@@ -157,6 +158,7 @@ export const CHANNELS: readonly Channel[] = [
   "yaw",
   "pitch",
   "roll",
+  "hipTilt",
   ...LIMBS,
   ...GROUP_NAMES.flatMap((g) => GROUPS[g].map((k) => `${g}.${k}` as GroupChannel)),
 ];

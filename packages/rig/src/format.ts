@@ -35,9 +35,11 @@ import {
  *    such a move wrong, so it refuses it as newer instead.
  * 6. The pelvis can move sideways (`pelvis.z`), so a move can spin and
  *    drift at once. Refused by older readers for the same reason.
+ * 7. The hip line can tilt (`hipTilt`), as a high kick lifts one hip.
+ *    Refused by older readers for the same reason.
  */
 export const FORMAT = "rig-editor";
-export const VERSION = 6;
+export const VERSION = 7;
 
 export interface Project {
   format: typeof FORMAT;
@@ -128,6 +130,10 @@ const MIGRATIONS: Record<number, (file: Raw) => Raw> = {
   5(file) {
     // The pelvis's z is new: 0 where it's left out.
     return { ...file, version: 6 };
+  },
+  6(file) {
+    // The hip tilt is new: level where it's left out.
+    return { ...file, version: 7 };
   },
 };
 
@@ -240,7 +246,7 @@ function readActive(raw: unknown, length: number): ActiveRange | undefined {
   };
 }
 
-const NUMBERS = ["lean", "headTilt", "bend", "yaw", "pitch", "roll"] as const;
+const NUMBERS = ["lean", "headTilt", "bend", "yaw", "pitch", "roll", "hipTilt"] as const;
 
 /** The parts of a (partial) pose that are well formed. */
 function readPose(raw: unknown): Partial<Pose> {

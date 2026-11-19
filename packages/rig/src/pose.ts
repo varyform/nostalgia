@@ -73,6 +73,12 @@ export interface Pose {
   /** Spine side-bend toward the near side, radians. */
   roll?: number;
   /**
+   * The hip line's tilt about the way the body faces, radians, turning the
+   * same way as `roll` (positive drops the near hip): a high kick lifts the
+   * kicking side's hip. The feet keep their places.
+   */
+  hipTilt?: number;
+  /**
    * Whole-body rotation about the pelvis in the side plane, radians:
    * positive tips the head toward the facing direction, negative tips it
    * back (−2π is a backflip). Applied before yaw.
@@ -126,6 +132,7 @@ export const clonePose = (p: Pose): Pose => ({
   bend: p.bend ?? 0,
   yaw: p.yaw ?? 0,
   roll: p.roll ?? 0,
+  hipTilt: p.hipTilt ?? 0,
   pitch: p.pitch ?? 0,
   swivel: { ...p.swivel },
   flex: { ...p.flex },
@@ -229,6 +236,7 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
     bend: lerp(a.bend ?? 0, b.bend ?? 0, t),
     yaw: lerp(a.yaw ?? 0, b.yaw ?? 0, t),
     roll: lerp(a.roll ?? 0, b.roll ?? 0, t),
+    hipTilt: lerp(a.hipTilt ?? 0, b.hipTilt ?? 0, t),
     pitch: lerp(a.pitch ?? 0, b.pitch ?? 0, t),
     swivel: lerpRecord(LIMBS, a.swivel, b.swivel, t),
     flex: lerpRecord(LIMBS, a.flex, b.flex, t),
@@ -249,6 +257,7 @@ export const CORE: ReadonlySet<string> = new Set([
   "bend",
   "yaw",
   "roll",
+  "hipTilt",
   "pitch",
 ]);
 
@@ -278,6 +287,7 @@ export function lerpPoseLead(a: Pose, b: Pose, t: number, lag = LEAD_LAG): Pose 
   limbs.bend = lerp(a.bend ?? 0, b.bend ?? 0, core);
   limbs.yaw = lerp(a.yaw ?? 0, b.yaw ?? 0, core);
   limbs.roll = lerp(a.roll ?? 0, b.roll ?? 0, core);
+  limbs.hipTilt = lerp(a.hipTilt ?? 0, b.hipTilt ?? 0, core);
   limbs.pitch = lerp(a.pitch ?? 0, b.pitch ?? 0, core);
   return limbs;
 }
@@ -294,6 +304,8 @@ const neck = vec3();
 const head = vec3();
 /** The chest's sideways axis (toward the near side), turned with the roll. */
 const side = vec3();
+/** The hips' sideways axis, turned with the hip tilt. */
+const hipSide = vec3();
 const root = vec3();
 const target = vec3();
 const pole = vec3();
@@ -330,6 +342,10 @@ function layOutSpine(pose: Pose, props: Proportions): void {
   side.x = 0;
   side.y = -sinRoll;
   side.z = cosRoll;
+  const tilt = pose.hipTilt ?? 0;
+  hipSide.x = 0;
+  hipSide.y = -Exact.sin(tilt);
+  hipSide.z = Exact.cos(tilt);
 }
 
 /** Where a limb's chain starts (shoulder or hip), body space; `layOutSpine` first. */
@@ -341,9 +357,10 @@ function limbRoot(limb: LimbName, props: Proportions, into: Vec3): void {
     into.y = chest.y + side.y * half;
     into.z = chest.z + side.z * half;
   } else {
+    const half = (s * props.hipWidth) / 2;
     into.x = pelvis.x;
-    into.y = pelvis.y;
-    into.z = pelvis.z + (s * props.hipWidth) / 2;
+    into.y = pelvis.y + hipSide.y * half;
+    into.z = pelvis.z + hipSide.z * half;
   }
 }
 
