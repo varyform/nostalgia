@@ -231,6 +231,28 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
 /** How far (fraction of a blend) the limbs trail the body. */
 const LEAD_LAG = 0.3;
 
+/** What `lead` easing runs ahead (the body's core); the rest trails. */
+export const CORE: ReadonlySet<string> = new Set([
+  "pelvis",
+  "lean",
+  "bend",
+  "yaw",
+  "roll",
+  "pitch",
+]);
+
+/** How far along a `lead` blend at `t` a part is: the core ahead, the rest behind (eased). */
+export function leadTime(core: boolean, t: number, lag = LEAD_LAG): number {
+  return smoothstep(clamp(core ? t / (1 - lag) : (t - lag) / (1 - lag), 0, 1));
+}
+
+/** One limb's target `t` of the way from `a`'s to `b`'s, as lerpPose blends it. */
+export function lerpTarget(a: Pose, b: Pose, limb: LimbName, t: number): Target {
+  return isArm(limb)
+    ? swingTarget(a[limb], b[limb], t, SHOULDER, SHOULDER)
+    : swingTarget(a[limb], b[limb], t, a.pelvis, b.pelvis, true);
+}
+
 /**
  * Overlapping action: the body leads and the limbs follow. The core
  * (pelvis, lean, bend, turn) runs ahead over the first `1 - lag` of the
@@ -238,8 +260,8 @@ const LEAD_LAG = 0.3;
  * both arrive together at `t` = 1, so the end pose is exact.
  */
 export function lerpPoseLead(a: Pose, b: Pose, t: number, lag = LEAD_LAG): Pose {
-  const core = smoothstep(clamp(t / (1 - lag), 0, 1));
-  const limbs = lerpPose(a, b, smoothstep(clamp((t - lag) / (1 - lag), 0, 1)));
+  const core = leadTime(true, t, lag);
+  const limbs = lerpPose(a, b, leadTime(false, t, lag));
   limbs.pelvis = { x: lerp(a.pelvis.x, b.pelvis.x, core), y: lerp(a.pelvis.y, b.pelvis.y, core) };
   limbs.lean = lerp(a.lean, b.lean, core);
   limbs.bend = lerp(a.bend ?? 0, b.bend ?? 0, core);

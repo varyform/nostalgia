@@ -1,11 +1,14 @@
-import { smoothstep } from "./math.ts";
+import { lerp, smoothstep } from "./math.ts";
 import {
+  CORE,
   FEET,
   FINGER_NAMES,
   HANDS,
+  leadTime,
   LIMBS,
   lerpPose,
   lerpPoseLead,
+  lerpTarget,
   REST_POSE,
   type FingerName,
   type FootName,
@@ -28,11 +31,15 @@ export interface Key {
   /** Frame from the start of the move, 0 up to the move's length − 1. */
   frame: number;
   /**
-   * What this key changes. Anything it leaves out carries over from the key
-   * before it; the first key carries over from the rest pose.
+   * The channels keyed here. A channel it leaves out passes through: it
+   * blends from the key before that sets it to the next one that does (as
+   * a curve passes a frame with no keyframe of its own), and holds before
+   * its first key and after its last. A channel no key sets is the rest
+   * pose's. (Before version 4, a left-out channel held from the key before:
+   * `fromCarryOver` turns such keys into these.)
    */
   pose: Partial<Pose>;
-  /** How this key is reached from the one before; `smooth` if left out. */
+  /** How the channels this key sets are reached from their keys before; `smooth` if left out. */
   ease?: Easing;
 }
 
@@ -213,6 +220,15 @@ export function diffPose(prev: Pose, pose: Pose): Partial<Pose> {
   return over;
 }
 
+/** Every channel there is, `pose`'s or 0 where it leaves one out, as a key. */
+export function everyChannel(pose: Pose): Partial<Pose> {
+  let over = fullKey(pose);
+  for (const ch of CHANNELS) {
+    if (!setsChannel(over, ch)) over = withScalar(over, ch as ScalarChannel, 0);
+  }
+  return over;
+}
+
 /** Every channel of `pose`, as a key that sets them all. */
 export function fullKey(pose: Pose): Partial<Pose> {
   const over: Partial<Pose> = {};
@@ -226,14 +242,180 @@ export function fullKey(pose: Pose): Partial<Pose> {
 
 // --- sampling -------------------------------------------------------------
 
-/** Each key as a whole pose, after carrying over what it leaves out. */
-export function resolveKeys(move: Move, rest: Pose = REST_POSE): Pose[] {
-  const out: Pose[] = [];
-  let pose = rest;
-  for (const key of move.keys) {
-    pose = mergePose(pose, key.pose);
-    out.push(pose);
+/** For each of CHANNELS (by index), the keys that set it (by index). */
+type Setters = readonly (readonly number[])[];
+const SETTERS = new WeakMap<readonly Pose[], Setters>();
+const PELVIS = CHANNELS.indexOf("pelvis");
+const ALL = CHANNELS.map((_, c) => c);
+const NOT_PELVIS = ALL.filter((c) => c !== PELVIS);
+
+/** Each of CHANNELS split once (group and part, or null), since sampling reads them all, often. */
+const SPLITS = CHANNELS.map((ch) => splitChannel(ch));
+
+/** A channel's value in a (partial) pose, by index; undefined where it's not set. */
+function valueAt(pose: Partial<Pose>, c: number): unknown {
+  const split = SPLITS[c];
+  const p = pose as unknown as Record<string, unknown>;
+  return split ? (p[split[0]] as NumberRecord | undefined)?.[split[1]] : p[CHANNELS[c]];
+}
+
+function settersOf(keys: readonly Key[]): Setters {
+  const out: number[][] = CHANNELS.map(() => []);
+  keys.forEach((k, i) => {
+    for (let c = 0; c < out.length; c++) if (valueAt(k.pose, c) !== undefined) out[c].push(i);
+  });
+  return out;
+}
+
+/** A pose to write channels into, sharing nothing it'd change with `p`. */
+function clonePose(p: Pose): Pose {
+  const out = { ...p };
+  for (const g of GROUP_NAMES) if (p[g]) (out as Record<string, unknown>)[g] = { ...p[g] };
+  return out;
+}
+
+/** Sets `out`'s channel (by index) to `from`'s; a group's part left out is 0. */
+function takeChannel(out: Pose, from: Pose, c: number): void {
+  const split = SPLITS[c];
+  const o = out as unknown as Record<string, unknown>;
+  if (!split) {
+    o[CHANNELS[c]] = from[CHANNELS[c] as keyof Pose];
+    return;
   }
+  const v = valueAt(from, c);
+  if (v !== undefined) ((o[split[0]] ??= {}) as NumberRecord)[split[1]] = v as number;
+  else if (o[split[0]]) delete (o[split[0]] as NumberRecord)[split[1]];
+}
+
+/** Blends one channel (by index) `t` of the way from `a` to `b` into `out`, as lerpPose would. */
+function blendChannel(out: Pose, a: Pose, b: Pose, t: number, kind: Easing, c: number): void {
+  const ch = CHANNELS[c];
+  const split = SPLITS[c];
+  const e = kind === "lead" ? leadTime(CORE.has(ch), t) : ease(kind, t);
+  const o = out as unknown as Record<string, unknown>;
+  if (ch === "pelvis") {
+    o.pelvis = { x: lerp(a.pelvis.x, b.pelvis.x, e), y: lerp(a.pelvis.y, b.pelvis.y, e) };
+  } else if (!split && (LIMBS as readonly string[]).includes(ch)) {
+    o[ch] = lerpTarget(a, b, ch as LimbName, e);
+  } else {
+    const from = (valueAt(a, c) as number | undefined) ?? 0;
+    const to = (valueAt(b, c) as number | undefined) ?? 0;
+    if (!split) o[ch] = lerp(from, to, e);
+    else if (from !== 0 || to !== 0)
+      ((o[split[0]] ??= {}) as NumberRecord)[split[1]] = lerp(from, to, e);
+    else if (o[split[0]]) delete (o[split[0]] as NumberRecord)[split[1]];
+  }
+}
+
+/**
+ * Where `frame` falls among a channel's keys (`s`, by index): the keys either
+ * side and how far from the first to the second, or one key twice where
+ * the channel holds. Null: no key sets it.
+ */
+function spanOf(move: Move, s: readonly number[], frame: number): [number, number, number] | null {
+  if (!s.length) return null;
+  const { keys, length } = move;
+  const f = move.loop ? ((frame % length) + length) % length : frame;
+  // The last of them on or before `f` (-1: none), by halves.
+  let lo = 0;
+  let hi = s.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (keys[s[mid]].frame <= f) lo = mid + 1;
+    else hi = mid;
+  }
+  const j = lo - 1;
+  const hold = (i: number): [number, number, number] => [i, i, 0];
+  if (s.length === 1) return hold(s[0]);
+  let a: number, b: number, aFrame: number, bFrame: number;
+  if (j === -1) {
+    if (!move.loop) return hold(s[0]);
+    [a, b] = [s.at(-1)!, s[0]];
+    [aFrame, bFrame] = [keys[a].frame - length, keys[b].frame];
+  } else if (j === s.length - 1) {
+    if (!move.loop) return hold(s[j]);
+    [a, b] = [s[j], s[0]];
+    [aFrame, bFrame] = [keys[a].frame, keys[b].frame + length];
+  } else {
+    [a, b] = [s[j], s[j + 1]];
+    [aFrame, bFrame] = [keys[a].frame, keys[b].frame];
+  }
+  const t = bFrame > aFrame ? (f - aFrame) / (bFrame - aFrame) : 1;
+  return t <= 0 ? hold(a) : [a, b, t];
+}
+
+/** Channels on the same two keys, the same way between them. */
+interface Blend {
+  a: number;
+  b: number;
+  t: number;
+  chs: number[];
+}
+
+/** The channels `chs` (indices) at `frame`, each between its own keys, in blends that share them. */
+function blends(move: Move, setters: Setters, frame: number, chs: readonly number[]): Blend[] {
+  const groups: Blend[] = [];
+  let last: Blend | undefined;
+  for (const c of chs) {
+    const span = spanOf(move, setters[c], frame);
+    if (!span) continue;
+    const [a, b, t] = span;
+    // Most channels share their keys with the channel before.
+    const same = (g: Blend) => g.a === a && g.b === b && g.t === t;
+    let g = last && same(last) ? last : groups.find(same);
+    if (g) g.chs.push(c);
+    else groups.push((g = { a, b, t, chs: [c] }));
+    last = g;
+  }
+  return groups;
+}
+
+/** A blend's channels written into `out`, from the keys' whole poses. */
+function apply(out: Pose, move: Move, poses: readonly Pose[], g: Blend): void {
+  const { a, b, t, chs } = g;
+  if (a === b) {
+    for (const c of chs) takeChannel(out, poses[a], c);
+    return;
+  }
+  const kind = move.keys[b].ease ?? "smooth";
+  // Many channels: blend the whole pose once; a few: just those.
+  if (chs.length > 16) {
+    const from =
+      kind === "lead"
+        ? lerpPoseLead(poses[a], poses[b], t)
+        : lerpPose(poses[a], poses[b], ease(kind, t));
+    for (const c of chs) takeChannel(out, from, c);
+  } else {
+    for (const c of chs) blendChannel(out, poses[a], poses[b], t, kind, c);
+  }
+}
+
+/** Each key as a whole pose: what it sets, and where the channels it leaves out pass by. */
+export function resolveKeys(move: Move, rest: Pose = REST_POSE): Pose[] {
+  const setters = settersOf(move.keys);
+  const out = move.keys.map((k) => clonePose(mergePose(rest, k.pose)));
+  const sets = setters.map((s) => new Set(s));
+  // The pelvis first: a foot swings about it, at both ends of its blend.
+  for (const pass of [[PELVIS], NOT_PELVIS]) {
+    move.keys.forEach((k, i) => {
+      const chs = pass.filter((c) => !sets[c].has(i));
+      for (const g of blends(move, setters, k.frame, chs)) apply(out[i], move, out, g);
+    });
+  }
+  SETTERS.set(out, setters);
+  return out;
+}
+
+/**
+ * `resolved` (from `resolveKeys`) for keys that changed only in which
+ * channels they set, other than the pelvis: no pose sampling reads has
+ * changed (a channel is read only off the keys that set it, and the feet
+ * read the pelvis everywhere), so only the keys' channels are read again.
+ * Much quicker than resolving afresh, for trying many such changes.
+ */
+export function rekeyed(move: Move, resolved: readonly Pose[]): Pose[] {
+  const out = resolved.slice();
+  SETTERS.set(out, settersOf(move.keys));
   return out;
 }
 
@@ -254,35 +436,68 @@ function ease(kind: Easing, t: number): number {
 
 /** The pose at `frame` (fractions blend too). Looping moves wrap; others hold their ends. */
 export function sampleMove(move: Move, frame: number, resolved = resolveKeys(move)): Pose {
-  const { keys } = move;
-  const n = keys.length;
-  if (n === 1) return resolved[0];
-  const f = move.loop ? ((frame % move.length) + move.length) % move.length : frame;
-  let i = -1;
-  while (i + 1 < n && keys[i + 1].frame <= f) i++;
-  let a = i;
-  let b = i + 1;
-  let aFrame: number;
-  let bFrame: number;
-  if (i === -1) {
-    if (!move.loop) return resolved[0];
-    a = n - 1;
-    b = 0;
-    aFrame = keys[a].frame - move.length;
-    bFrame = keys[0].frame;
-  } else if (i === n - 1) {
-    if (!move.loop) return resolved[n - 1];
-    b = 0;
-    aFrame = keys[a].frame;
-    bFrame = keys[0].frame + move.length;
-  } else {
-    aFrame = keys[a].frame;
-    bFrame = keys[b].frame;
+  if (move.keys.length === 1) return resolved[0];
+  const setters = SETTERS.get(resolved) ?? settersOf(move.keys);
+  const groups = blends(move, setters, frame, ALL);
+  // The blend most channels share, as a whole pose: the others go on top of it.
+  const main = groups.reduce((x, g) => (g.chs.length > x.chs.length ? g : x));
+  const whole = (g: Blend): Pose => {
+    const { a, b, t } = g;
+    if (a === b) return resolved[a];
+    const kind = move.keys[b].ease ?? "smooth";
+    if (kind === "lead") return lerpPoseLead(resolved[a], resolved[b], t);
+    return lerpPose(resolved[a], resolved[b], ease(kind, t));
+  };
+  if (groups.length === 1 && main.chs.length === ALL.length) return whole(main);
+  // A held channel's pose is a key's own: copied before it's written over.
+  const out = main.a === main.b ? clonePose(whole(main)) : whole(main);
+  for (const g of groups) if (g !== main) apply(out, move, resolved, g);
+  return out;
+}
+
+/**
+ * A move whose keys were written the old way (before version 4: a channel a
+ * key leaves out holds from the key before), as keys that play the same:
+ * each sets what it showed, less what it shares with the keys either side.
+ */
+export function fromCarryOver(move: Move, rest: Pose = REST_POSE): Move {
+  const keys = [...move.keys].sort((a, b) => a.frame - b.frame);
+  let pose = rest;
+  const out: Move = {
+    ...move,
+    keys: keys.map((k) => {
+      pose = mergePose(pose, k.pose);
+      // Every key sets everything, even what's still at 0 (left out of the pose): a channel
+      // a key leaves out would blend through it toward the next key that sets it.
+      return { ...k, pose: everyChannel(pose) };
+    }),
+  };
+  compactKeys(out, rest);
+  return out;
+}
+
+/**
+ * Leaves out of each key the channels that are the same there as on the
+ * keys either side that set them, which changes nothing: the channel
+ * passes through at that value anyway. (A foot also needs the pelvis the
+ * same there, since it swings about it.) A channel's first and last keys
+ * keep it.
+ */
+export function compactKeys(move: Move, rest: Pose = REST_POSE): void {
+  const resolved = resolveKeys(move, rest);
+  for (const ch of CHANNELS) {
+    const s = move.keys.flatMap((k, i) => (setsChannel(k.pose, ch) ? [i] : []));
+    const foot = ch === "footNear" || ch === "footFar";
+    const same = (p: number, q: number) =>
+      sameChannel(resolved[p], resolved[q], ch) &&
+      (!foot || sameChannel(resolved[p], resolved[q], "pelvis"));
+    let prev = s[0];
+    for (let x = 1; x < s.length - 1; x++) {
+      const i = s[x];
+      if (same(prev, i) && same(i, s[x + 1])) clearChannel(move.keys[i].pose, ch);
+      else prev = i;
+    }
   }
-  const t = bFrame > aFrame ? (f - aFrame) / (bFrame - aFrame) : 1;
-  const kind = keys[b].ease ?? "smooth";
-  if (kind === "lead") return lerpPoseLead(resolved[a], resolved[b], t);
-  return lerpPose(resolved[a], resolved[b], ease(kind, t));
 }
 
 /** Whether the move can hit on `frame`. */
@@ -296,58 +511,117 @@ export const keyAt = (move: Move, frame: number): number =>
   move.keys.findIndex((k) => k.frame === frame);
 
 /**
- * Adds a key on `frame` holding the pose the move has there, so nothing
- * changes until it's edited. Returns its index (an existing key's, if any).
+ * Adds a key on `frame` setting every channel to the pose the move has
+ * there (pinning it), as Add key does. Returns its index (an existing
+ * key's, if any).
  */
 export function addKey(move: Move, frame: number, rest: Pose = REST_POSE): number {
   const existing = keyAt(move, frame);
   if (existing >= 0) return existing;
-  const resolved = resolveKeys(move, rest);
-  const pose = sampleMove(move, frame, resolved);
-  const index = move.keys.findIndex((k) => k.frame > frame);
-  const at = index < 0 ? move.keys.length : index;
-  const prev = at > 0 ? resolved[at - 1] : rest;
-  const ease = move.keys[at]?.ease;
-  move.keys.splice(at, 0, {
-    frame,
-    pose: at === 0 ? fullKey(pose) : diffPose(prev, pose),
-    ...(ease ? { ease } : {}),
-  });
-  return at;
+  const pose = sampleMove(move, frame, resolveKeys(move, rest));
+  return insertKey(move, frame, everyChannel(pose));
 }
 
 /**
- * Removes a key; what it changed goes with it. The last key can't go. The
- * first key's whole pose passes to the next one, which becomes the first.
+ * The key on `frame`, added if there's none, setting nothing yet: what an
+ * edit then sets is keyed there, and the rest pass through as they did.
  */
-export function removeKey(move: Move, index: number, rest: Pose = REST_POSE): boolean {
+export function ensureKey(move: Move, frame: number): number {
+  const existing = keyAt(move, frame);
+  return existing >= 0 ? existing : insertKey(move, frame, {});
+}
+
+function insertKey(move: Move, frame: number, pose: Partial<Pose>): number {
+  const index = move.keys.findIndex((k) => k.frame > frame);
+  const at = index < 0 ? move.keys.length : index;
+  // Reached the way the key after it is, so a blend keeps its feel.
+  const ease = move.keys[at]?.ease;
+  move.keys.splice(at, 0, { frame, pose, ...(ease ? { ease } : {}) });
+  return at;
+}
+
+/** Removes a key; the channels it set pass through it after. The last key can't go. */
+export function removeKey(move: Move, index: number): boolean {
   if (move.keys.length <= 1) return false;
-  if (index === 0) {
-    const resolved = resolveKeys(move, rest);
-    move.keys[1].pose = fullKey(resolved[1]);
-  }
   move.keys.splice(index, 1);
   return true;
 }
 
-/**
- * Moves a key to another frame. Every key keeps the pose it shows, even
- * when keys swap order. Fails on a frame another key is on.
- */
-export function moveKey(move: Move, index: number, frame: number, rest: Pose = REST_POSE): boolean {
+const byFrame = (a: Key, b: Key) => a.frame - b.frame;
+
+/** Moves a key, with what it sets, to another frame. Fails on a frame another key is on. */
+export function moveKey(move: Move, index: number, frame: number): boolean {
   const f = Math.max(0, Math.min(move.length - 1, Math.round(frame)));
   const other = keyAt(move, f);
   if (other >= 0) return other === index;
-  const resolved = resolveKeys(move, rest);
-  const entries = move.keys.map((key, i) => ({ key, pose: resolved[i] }));
-  entries[index].key.frame = f;
-  entries.sort((a, b) => a.key.frame - b.key.frame);
-  if (entries.every((e, i) => e.key === move.keys[i])) return true;
-  move.keys = entries.map((e, i) => ({
-    ...e.key,
-    pose: i === 0 ? fullKey(e.pose) : diffPose(entries[i - 1].pose, e.pose),
-  }));
+  move.keys[index].frame = f;
+  move.keys.sort(byFrame);
   return true;
+}
+
+/**
+ * Moves keys (by index) `by` frames, with what they set, past other keys if
+ * need be. Fails if one would leave the move or land on a key not moving.
+ */
+export function shiftKeys(move: Move, indices: readonly number[], by: number): boolean {
+  const moving = new Set(indices);
+  const to = move.keys.map((k, i) => (moving.has(i) ? k.frame + by : k.frame));
+  if (to.some((f) => f < 0 || f >= move.length) || new Set(to).size < to.length) return false;
+  move.keys.forEach((k, i) => (k.frame = to[i]));
+  move.keys.sort(byFrame);
+  return true;
+}
+
+/**
+ * Moves what keys (by index) set of `channels` (a body part's) `by` frames,
+ * into the keys there (added where there's none), leaving the rest of each
+ * key where it is: so one part can run ahead of or behind the others. A
+ * key left setting nothing goes. Fails if a frame is out of the move, or
+ * its key already sets one of the channels.
+ */
+export function moveChannels(
+  move: Move,
+  indices: readonly number[],
+  channels: readonly Channel[],
+  by: number,
+): boolean {
+  if (!by) return true;
+  const keys = structuredClone(move.keys);
+  const sources = indices.filter((i) => channels.some((ch) => setsChannel(keys[i].pose, ch)));
+  const moved = sources.map((i) => {
+    const part: Partial<Pose> = {};
+    for (const ch of channels) {
+      if (!setsChannel(keys[i].pose, ch)) continue;
+      copyChannel(part, keys[i].pose as Pose, ch);
+      clearChannel(keys[i].pose, ch);
+    }
+    return { frame: keys[i].frame + by, part, ease: keys[i].ease };
+  });
+  if (moved.some((m) => m.frame < 0 || m.frame >= move.length)) return false;
+  const emptied = new Set(sources.map((i) => keys[i]).filter((k) => !Object.keys(k.pose).length));
+  for (const m of moved) {
+    let key = keys.find((k) => k.frame === m.frame);
+    if (key && !emptied.has(key) && channels.some((ch) => setsChannel(key!.pose, ch))) return false;
+    if (!key) {
+      key = { frame: m.frame, pose: {}, ...(m.ease ? { ease: m.ease } : {}) };
+      keys.push(key);
+    }
+    emptied.delete(key);
+    key.pose = mergePartial(key.pose, m.part);
+  }
+  const kept = keys.filter((k) => !emptied.has(k));
+  if (!kept.length) return false;
+  move.keys = kept.sort(byFrame);
+  return true;
+}
+
+/** `over` with what `more` sets as well; the groups merge part by part. */
+function mergePartial(over: Partial<Pose>, more: Partial<Pose>): Partial<Pose> {
+  const out: Record<string, unknown> = { ...over };
+  for (const [k, v] of Object.entries(more)) {
+    out[k] = isGroup(k) ? { ...(over[k] as NumberRecord), ...(v as NumberRecord) } : v;
+  }
+  return out as Partial<Pose>;
 }
 
 /** A key to put on a move: the whole pose it shows. */
@@ -358,39 +632,43 @@ export interface PutKey {
 }
 
 /**
- * Puts keys on frames, each showing its pose; a key already on one of
- * those frames gives way, and so do the keys at `remove` (indices). Every
- * other key keeps the pose it shows. Frames out of the move are left out.
+ * Puts keys on frames, each setting every channel to its pose; a key
+ * already on one of those frames gives way, and so do the keys at `remove`
+ * (indices). The other keys keep what they set. Frames out of the move are
+ * left out.
  */
-export function putKeys(
-  move: Move,
-  put: readonly PutKey[],
-  remove: readonly number[] = [],
-  rest: Pose = REST_POSE,
-): void {
-  const resolved = resolveKeys(move, rest);
+export function putKeys(move: Move, put: readonly PutKey[], remove: readonly number[] = []): void {
   const gone = new Set(remove);
   const placed = put.filter(
     (p) => Number.isInteger(p.frame) && p.frame >= 0 && p.frame < move.length,
   );
   const taken = new Set(placed.map((p) => p.frame));
-  const entries = [
-    ...move.keys
-      .map((key, i) => ({ key, pose: resolved[i], was: i }))
-      .filter((e) => !gone.has(e.was) && !taken.has(e.key.frame)),
-    ...placed.map((p) => ({
-      key: { frame: p.frame, pose: {}, ...(p.ease ? { ease: p.ease } : {}) } as Key,
-      pose: p.pose,
-      was: -1,
+  const keys = [
+    ...move.keys.filter((k, i) => !gone.has(i) && !taken.has(k.frame)),
+    ...placed.map((p): Key => ({
+      frame: p.frame,
+      pose: everyChannel(p.pose),
+      ...(p.ease ? { ease: p.ease } : {}),
     })),
-  ].sort((a, b) => a.key.frame - b.key.frame);
-  if (!entries.length) return;
-  move.keys = entries.map((e, i) => {
-    // A key after the same one as before still shows its pose as it is.
-    const prev = entries[i - 1];
-    if (e.was >= 0 && (i ? prev.was === e.was - 1 : e.was === 0)) return e.key;
-    return { ...e.key, pose: i ? diffPose(prev.pose, e.pose) : fullKey(e.pose) };
-  });
+  ].sort(byFrame);
+  if (keys.length) move.keys = keys;
+}
+
+/**
+ * Makes a move play `factor` times as long: its keys spread over more
+ * frames (or draw together, under 1), the hit window with them. Keys stay a
+ * frame apart at least, so none merge.
+ */
+export function stretchMove(move: Move, factor: number): void {
+  let last = -1;
+  for (const k of move.keys) last = k.frame = Math.max(last + 1, Math.round(k.frame * factor));
+  move.length = Math.max(Math.round(move.length * factor), last + 1);
+  const a = move.active;
+  if (a) {
+    // The frames from..to are the span [from, to + 1): stretch that.
+    a.from = Math.min(Math.round(a.from * factor), move.length - 1);
+    a.to = Math.min(Math.max(a.from, Math.round((a.to + 1) * factor) - 1), move.length - 1);
+  }
 }
 
 /** The shortest a move can be: up to its last key. */
@@ -398,5 +676,5 @@ export const minLength = (move: Move): number => (move.keys.at(-1)?.frame ?? 0) 
 
 /** A new move: one key at frame 0 holding `pose`. */
 export function newMove(name: string, pose: Pose = REST_POSE, length = 30): Move {
-  return { name, tags: [], length, loop: false, keys: [{ frame: 0, pose: fullKey(pose) }] };
+  return { name, tags: [], length, loop: false, keys: [{ frame: 0, pose: everyChannel(pose) }] };
 }

@@ -2,6 +2,7 @@ import { LIMBS, type Pose, type Target } from "./pose.ts";
 import { DEFAULT_PROPORTIONS, JOINT_NAMES, type JointName, type Proportions } from "./skeleton.ts";
 import {
   EASINGS,
+  fromCarryOver,
   GROUPS,
   type ActiveRange,
   type Easing,
@@ -22,9 +23,12 @@ import {
  * 3. A spine of four bones, fingers (`curl`, `spread`), hands that turn
  *    (`twist`) and feet that break at the ball (`toes`). The rest pose turns the palms in, so a move's first key
  *    keeps the old palms (twist 0) unless it sets its own.
+ * 4. A channel a key leaves out passes through it, from the key before
+ *    that sets it to the next, rather than holding from the key before:
+ *    each channel keyed on its own, so a part can run on its own timing.
  */
 export const FORMAT = "rig-editor";
-export const VERSION = 3;
+export const VERSION = 4;
 
 export interface Project {
   format: typeof FORMAT;
@@ -99,6 +103,14 @@ const MIGRATIONS: Record<number, (file: Raw) => Raw> = {
       return { ...move, keys: [{ ...first, pose: { ...pose, twist } }, ...rest] };
     });
     return { ...file, version: 3, moves };
+  },
+  3(file) {
+    // A channel a key left out held from the key before; now it passes
+    // through to the next key that sets it. Keys set what they showed.
+    const moves = (Array.isArray(file.moves) ? file.moves : []).map((move) =>
+      isObject(move) ? (fromCarryOver(readMove(move)) as unknown as Raw) : move,
+    );
+    return { ...file, version: 4, moves };
   },
 };
 
