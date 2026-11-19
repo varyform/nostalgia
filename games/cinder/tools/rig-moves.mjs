@@ -1,7 +1,7 @@
 // Cinder's moves (src/hd/poses.js) as a rig editor project (~/projects/rig-editor): every move is
 // sampled per frame with the game's own poseFor, its 2D skeleton (rig.js solve) is laid out as
 // the rig's joints (lead limbs on the far side, rear on the near side), and the frames are fitted
-// and thinned to keys with the editor's own Import pipeline (fit.ts), within 1 cm of the game.
+// and thinned to keys with the editor's own Import pipeline (fit.ts), within 1 cm of that.
 // Open the result in the editor with Import.
 //
 //   node games/cinder/tools/rig-moves.mjs [out.rig.json]   (Node 24: it loads the editor's .ts)
@@ -21,9 +21,11 @@ const { createJointBuffer, DEFAULT_PROPORTIONS, Joint, JOINT_STRIDE } = await im
 import { writeFileSync } from "node:fs";
 
 const FPS = 60;
-// The game's figure: its bones (rig.js BONE), the rest as the rig has them.
+// The game's figure: its torso, arms and legs (rig.js BONE). The game has no neck, head, hands,
+// feet or widths of its own to go by, so those are the rig's, grown as much as its legs are.
+const GROWN = (BONE.th + BONE.sh) / (DEFAULT_PROPORTIONS.thigh + DEFAULT_PROPORTIONS.shin);
 const props = {
-  ...DEFAULT_PROPORTIONS,
+  ...Object.fromEntries(Object.entries(DEFAULT_PROPORTIONS).map(([k, v]) => [k, v * GROWN])),
   spineLower: BONE.torso / 2,
   spineUpper: BONE.torso / 2,
   upperArm: BONE.ua,
@@ -31,6 +33,7 @@ const props = {
   thigh: BONE.th,
   shin: BONE.sh,
 };
+const TORSO = props.spineLower + props.spineUpper;
 // The game's ankles stand 0.08 over the ground; the rig's y = 0 is ankle height.
 const ANKLE = 0.08;
 
@@ -42,13 +45,15 @@ function joints(p) {
   const along = (a, b, q) => [a[0] + (b[0] - a[0]) * q, a[1] + (b[1] - a[1]) * q];
   const dir = (deg) => [Math.sin((deg * Math.PI) / 180), Math.cos((deg * Math.PI) / 180)];
   const step = (a, d, l) => [a[0] + d[0] * l, a[1] + d[1] * l];
+  // The game's torso line, as long as the rig's: the arms and head hang from its top.
+  const S = step(J.H, J.up, TORSO);
   put(Joint.pelvis, J.H);
-  put(Joint.belly, along(J.H, J.S, 0.25));
-  put(Joint.waist, along(J.H, J.S, 0.5));
-  put(Joint.ribs, along(J.H, J.S, 0.75));
-  put(Joint.chest, J.S);
+  put(Joint.belly, along(J.H, S, 0.25));
+  put(Joint.waist, along(J.H, S, 0.5));
+  put(Joint.ribs, along(J.H, S, 0.75));
+  put(Joint.chest, S);
   // The head as the rig carries it: the neck half the nod, the head all of it.
-  const neck = step(J.S, dir(p.t + p.n / 2), props.neck);
+  const neck = step(S, dir(p.t + p.n / 2), props.neck);
   put(Joint.neck, neck);
   put(Joint.head, step(neck, dir(p.t + p.n), props.headRadius));
   // Lead limbs (la, ll) are the far side, rear (ra, rl) the near.
@@ -62,7 +67,7 @@ function joints(p) {
     // The game sets each shoulder and hip a little fore or aft of the body's line for a
     // three-quarter look; the rig stands side-on, so each limb hangs from the line itself.
     const from = (root, to) => (q) => [q[0] + to[0] - root[0], q[1] + to[1] - root[1]];
-    const a = from(arm.s, J.S);
+    const a = from(arm.s, S);
     const l = from(leg.h, J.H);
     put(j("shoulder"), a(arm.s), zs);
     put(j("elbow"), a(arm.e), zs);
