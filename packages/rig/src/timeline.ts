@@ -11,6 +11,7 @@ import {
   lerpPoseLead,
   lerpTarget,
   REST_POSE,
+  steadySwivel,
   type FingerName,
   type FootName,
   type HandName,
@@ -146,6 +147,7 @@ export type Channel =
   | "headTilt"
   | "yaw"
   | "pitch"
+  | "bank"
   | "roll"
   | "upperRoll"
   | "spineTwist"
@@ -163,6 +165,7 @@ export const CHANNELS: readonly Channel[] = [
   "headTilt",
   "yaw",
   "pitch",
+  "bank",
   "roll",
   "upperRoll",
   "spineTwist",
@@ -446,18 +449,26 @@ export function resolveKeys(move: Move, rest: Pose = REST_POSE): Pose[] {
       for (const g of blends(move, setters, k.frame, chs)) apply(out[i], move, out, g);
     });
   }
+  // The swivels a key passes through, as sampleMove gives them (with the rest in place).
+  move.keys.forEach((k, i) => {
+    const chs = SWIVELS.map(([c]) => c).filter((c) => !sets[c].has(i));
+    for (const g of blends(move, setters, k.frame, chs)) steady(out[i], move, out, g);
+  });
   SETTERS.set(out, setters);
   return out;
 }
 
 /**
  * `resolved` (from `resolveKeys`) for keys that changed only in which
- * channels they set, other than the pelvis: no pose sampling reads has
- * changed (a channel is read only off the keys that set it, and the feet
- * read the pelvis everywhere), so only the keys' channels are read again.
- * Much quicker than resolving afresh, for trying many such changes.
+ * channels they set, other than the pelvis: a channel is read only off the
+ * keys that set it (and the feet read the pelvis everywhere), so only the
+ * keys' channels are read again. But a knee or elbow reads its limb and the
+ * chest or hips off its swivel's keys (`steadySwivel`), so with `ch`, the
+ * one channel whose keys changed, that is resolved again where it passes
+ * through. Much quicker than resolving afresh, for trying many changes.
  */
-export function rekeyed(move: Move, resolved: readonly Pose[]): Pose[] {
+export function rekeyed(move: Move, resolved: readonly Pose[], ch?: Channel): Pose[] {
+  if (ch) return rekeyedChannel(move, resolved, ch);
   const out = resolved.slice();
   SETTERS.set(out, settersOf(move.keys));
   return out;
@@ -493,11 +504,80 @@ export function sampleMove(move: Move, frame: number, resolved = resolveKeys(mov
     if (kind === "lead") return lerpPoseLead(resolved[a], resolved[b], t);
     return lerpPose(resolved[a], resolved[b], ease(kind, t));
   };
-  if (groups.length === 1 && main.chs.length === ALL.length) return whole(main);
+  if (groups.length === 1 && main.chs.length === ALL.length && main.a === main.b) {
+    return whole(main);
+  }
   // A held channel's pose is a key's own: copied before it's written over.
   const out = main.a === main.b ? clonePose(whole(main)) : whole(main);
   for (const g of groups) if (g !== main) apply(out, move, resolved, g);
+  for (const g of groups) steady(out, move, resolved, g);
   return out;
+}
+
+/** What each swivel's bend turns with (`steadySwivel`): its limb, and the chest or the hips. */
+const BENDS_WITH: Partial<Record<Channel, readonly Channel[]>> = Object.fromEntries(
+  LIMBS.map((limb) => [
+    `swivel.${limb}`,
+    [
+      limb,
+      ...(HANDS.includes(limb as HandName)
+        ? (["lean", "bend", "roll", "upperRoll", "spineTwist"] as const)
+        : (["pelvis", "hipTilt"] as const)),
+    ],
+  ]),
+);
+
+/** Each swivel channel's index, by limb. */
+const SWIVELS = LIMBS.map((limb) => [CHANNELS.indexOf(`swivel.${limb}`), limb] as const);
+
+/**
+ * `resolved` for `move` where only which keys set `ch` changed: that one
+ * channel resolved again on the keys that pass it through (the rest are as
+ * they were).
+ */
+function rekeyedChannel(move: Move, resolved: readonly Pose[], ch: Channel): Pose[] {
+  const setters = settersOf(move.keys);
+  const c = CHANNELS.indexOf(ch);
+  const sets = new Set(setters[c]);
+  const swivel = SWIVELS.some(([s]) => s === c);
+  const out = resolved.slice();
+  move.keys.forEach((k, i) => {
+    if (sets.has(i)) return;
+    const pose = clonePose(resolved[i]);
+    // No key sets it any more: it's the rest's, as resolveKeys has it.
+    if (!sets.size) {
+      takeChannel(pose, REST_POSE, c);
+      out[i] = pose;
+      return;
+    }
+    for (const g of blends(move, setters, k.frame, [c])) {
+      apply(pose, move, resolved, g);
+      if (swivel) steady(pose, move, resolved, g);
+    }
+    out[i] = pose;
+  });
+  SETTERS.set(out, setters);
+  return out;
+}
+
+/**
+ * The swivels of a blend written again into `out` (blended in all), so the
+ * knees and elbows bend steadily between keys (`steadySwivel`).
+ */
+function steady(out: Pose, move: Move, poses: readonly Pose[], g: Blend): void {
+  const { a, b, t } = g;
+  if (a === b) return;
+  const kind = move.keys[b].ease ?? "smooth";
+  if (kind === "hold") return;
+  for (const [c, limb] of SWIVELS) {
+    if (!g.chs.includes(c)) continue;
+    const e = g.curve
+      ? alongCurve(g.curve, t)
+      : kind === "lead"
+        ? leadTime(false, t)
+        : ease(kind, t);
+    out.swivel = { ...out.swivel, [limb]: steadySwivel(poses[a], poses[b], out, limb, e) };
+  }
 }
 
 /**
@@ -533,9 +613,13 @@ export function compactKeys(move: Move, rest: Pose = REST_POSE): void {
   for (const ch of CHANNELS) {
     const s = move.keys.flatMap((k, i) => (setsChannel(k.pose, ch) ? [i] : []));
     const foot = ch === "footNear" || ch === "footFar";
+    // A swivel blends steadily from its keys' limbs and chests (steadySwivel): it only
+    // passes through a key unchanged where those are the same there too.
+    const bends = BENDS_WITH[ch] ?? [];
     const same = (p: number, q: number) =>
       sameChannel(resolved[p], resolved[q], ch) &&
-      (!foot || sameChannel(resolved[p], resolved[q], "pelvis"));
+      (!foot || sameChannel(resolved[p], resolved[q], "pelvis")) &&
+      bends.every((b) => sameChannel(resolved[p], resolved[q], b));
     let prev = s[0];
     for (let x = 1; x < s.length - 1; x++) {
       const i = s[x];

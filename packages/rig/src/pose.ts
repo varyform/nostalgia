@@ -1,4 +1,13 @@
-import { Exact, clamp, lerp, smoothstep, vec3, type Vec2, type Vec3 } from "./math.ts";
+import {
+  Exact,
+  clamp,
+  lerp,
+  nearestAngle,
+  smoothstep,
+  vec3,
+  type Vec2,
+  type Vec3,
+} from "./math.ts";
 import { solveTwoBone3 } from "./ik.ts";
 import {
   BALL,
@@ -10,6 +19,7 @@ import {
   SIDES,
   type Finger,
   type JointIndex,
+  DEFAULT_PROPORTIONS,
   type Proportions,
   type Side,
 } from "./skeleton.ts";
@@ -93,6 +103,12 @@ export interface Pose {
    * back (−2π is a backflip). Applied before yaw.
    */
   pitch?: number;
+  /**
+   * Whole-body rotation about the pelvis about the way the body faces,
+   * radians: positive tips the head toward the near side (2π is a
+   * cartwheel). Applied before pitch.
+   */
+  bank?: number;
   /** Rotates a knee or elbow about its root→target line, radians; positive swings it toward the near side. */
   swivel?: Partial<Record<LimbName, number>>;
   /**
@@ -152,6 +168,7 @@ export const clonePose = (p: Pose): Pose => ({
   spineTwist: p.spineTwist ?? 0,
   hipTilt: p.hipTilt ?? 0,
   pitch: p.pitch ?? 0,
+  bank: p.bank ?? 0,
   swivel: { ...p.swivel },
   flex: { ...p.flex },
   twist: { ...p.twist },
@@ -260,6 +277,7 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
     spineTwist: lerp(a.spineTwist ?? 0, b.spineTwist ?? 0, t),
     hipTilt: lerp(a.hipTilt ?? 0, b.hipTilt ?? 0, t),
     pitch: lerp(a.pitch ?? 0, b.pitch ?? 0, t),
+    bank: lerp(a.bank ?? 0, b.bank ?? 0, t),
     swivel: lerpRecord(LIMBS, a.swivel, b.swivel, t),
     flex: lerpRecord(LIMBS, a.flex, b.flex, t),
     twist: lerpRecord(HANDS, a.twist, b.twist, t),
@@ -285,6 +303,7 @@ export const CORE: ReadonlySet<string> = new Set([
   "spineTwist",
   "hipTilt",
   "pitch",
+  "bank",
 ]);
 
 /** How far along a `lead` blend at `t` a part is: the core ahead, the rest behind (eased). */
@@ -317,6 +336,7 @@ export function lerpPoseLead(a: Pose, b: Pose, t: number, lag = LEAD_LAG): Pose 
   limbs.upperRoll = lerp(a.upperRoll ?? 0, b.upperRoll ?? 0, core);
   limbs.spineTwist = lerp(a.spineTwist ?? 0, b.spineTwist ?? 0, core);
   limbs.pitch = lerp(a.pitch ?? 0, b.pitch ?? 0, core);
+  limbs.bank = lerp(a.bank ?? 0, b.bank ?? 0, core);
   return limbs;
 }
 
@@ -466,19 +486,33 @@ export interface Placement {
 
 const ORIGIN: Placement = { x: 0, y: 0, facing: 1 };
 
-/** A body-space point in world space: pitched about the pelvis, turned by yaw, then placed. */
+/**
+ * A body-space point in world space: banked and pitched about the pelvis,
+ * turned by yaw, then placed.
+ */
 export function toWorld(pose: Pose, v: Vec3, at: Placement = ORIGIN, into: Vec3 = vec3()): Vec3 {
   const pitch = pose.pitch ?? 0;
+  const bank = pose.bank ?? 0;
   const yaw = pose.yaw ?? 0;
   const cp = Exact.cos(pitch);
   const sp = Exact.sin(pitch);
   const cy = Exact.cos(yaw);
   const sy = Exact.sin(yaw);
   const dx = v.x - pose.pelvis.x;
-  const dy = v.y - pose.pelvis.y;
+  let dy = v.y - pose.pelvis.y;
+  let z = v.z;
+  if (bank !== 0) {
+    // About the pelvis's forward line: its z is the pelvis's own (sideways, it can be off 0).
+    const cb = Exact.cos(bank);
+    const sb = Exact.sin(bank);
+    const pz = pose.pelvis.z ?? 0;
+    const dz = z - pz;
+    const by = dy * cb - dz * sb;
+    z = pz + dy * sb + dz * cb;
+    dy = by;
+  }
   const x = pose.pelvis.x + dx * cp + dy * sp;
   const y = pose.pelvis.y - dx * sp + dy * cp;
-  const z = v.z;
   into.x = at.x + (x * cy - z * sy) * at.facing;
   into.y = at.y + y;
   into.z = x * sy + z * cy;
@@ -499,8 +533,20 @@ export function toBody(pose: Pose, w: Vec3, at: Placement = ORIGIN, into: Vec3 =
   const dx = x - pose.pelvis.x;
   const dy = w.y - at.y - pose.pelvis.y;
   into.x = pose.pelvis.x + dx * cp - dy * sp;
-  into.y = pose.pelvis.y + dx * sp + dy * cp;
-  into.z = z;
+  const bank = pose.bank ?? 0;
+  if (bank === 0) {
+    // As it always was, to the last digit.
+    into.y = pose.pelvis.y + dx * sp + dy * cp;
+    into.z = z;
+    return into;
+  }
+  const by = dx * sp + dy * cp;
+  const cb = Exact.cos(bank);
+  const sb = Exact.sin(bank);
+  const pz = pose.pelvis.z ?? 0;
+  const dz = z - pz;
+  into.y = pose.pelvis.y + by * cb + dz * sb;
+  into.z = pz - by * sb + dz * cb;
   return into;
 }
 
@@ -617,6 +663,113 @@ function bendPole(from: Vec3, bend: 1 | -1, swivel: number, hinge: Vec3): void {
   rotateAbout(pole, axis, swivel);
 }
 
+/** The bend's frame for a limb: its unit direction and the unswivelled pole, square to it. */
+function bendFrame(pose: Pose, limb: LimbName, dir: Vec3, pole0: Vec3): void {
+  const arm = isArm(limb);
+  const t = pose[limb];
+  let hx = 0;
+  let hy = 0;
+  let hz = 1;
+  if (arm) {
+    // Wrists are relative to their shoulders; the hinge is body z turned with the chest
+    // (its up along the spine's top bone, as layOutSpine lays it).
+    dir.x = t.x;
+    dir.y = t.y;
+    dir.z = t.z ?? 0;
+    const upper = pose.lean + (pose.bend ?? 0);
+    const top = (pose.roll ?? 0) + (pose.upperRoll ?? 0);
+    const c = Exact.cos(upper);
+    const up = { x: Exact.sin(upper), y: c * Exact.cos(top), z: c * Exact.sin(top) };
+    const hinge = { x: 0, y: 0, z: 1 };
+    rotateAbout(hinge, up, -(pose.spineTwist ?? 0));
+    hx = hinge.x;
+    hy = hinge.y;
+    hz = hinge.z;
+  } else {
+    // From the hip (the hips' width is the default one: only the direction matters here).
+    const half = (sideOf(limb) * DEFAULT_PROPORTIONS.hipWidth) / 2;
+    const tilt = pose.hipTilt ?? 0;
+    dir.x = t.x - pose.pelvis.x;
+    dir.y = t.y - (pose.pelvis.y - Exact.sin(tilt) * half);
+    dir.z = half + (t.z ?? 0) - ((pose.pelvis.z ?? 0) + Exact.cos(tilt) * half);
+  }
+  const len = Exact.hypot(dir.x, dir.y, dir.z) || 1;
+  dir.x /= len;
+  dir.y /= len;
+  dir.z /= len;
+  const bend = arm ? -1 : 1;
+  pole0.x = (hy * dir.z - hz * dir.y) * bend;
+  pole0.y = (hz * dir.x - hx * dir.z) * bend;
+  pole0.z = (hx * dir.y - hy * dir.x) * bend;
+  const pl = Exact.hypot(pole0.x, pole0.y, pole0.z);
+  if (pl < 1e-6) {
+    pole0.x = bend > 0 ? 1 : 0;
+    pole0.y = bend > 0 ? 0 : -1;
+    pole0.z = 0;
+  } else {
+    pole0.x /= pl;
+    pole0.y /= pl;
+    pole0.z /= pl;
+  }
+}
+
+/**
+ * How far `pole` (square to `dir`) is turned about `dir` from `ref` (square
+ * to `from`) carried over to `dir` by the least turn that takes `from` there.
+ */
+function poleDrift(from: Vec3, ref: Vec3, dir: Vec3, pole: Vec3): number {
+  const carried = { x: ref.x, y: ref.y, z: ref.z };
+  const kx = from.y * dir.z - from.z * dir.y;
+  const ky = from.z * dir.x - from.x * dir.z;
+  const kz = from.x * dir.y - from.y * dir.x;
+  const sin = Exact.hypot(kx, ky, kz);
+  const cos = from.x * dir.x + from.y * dir.y + from.z * dir.z;
+  if (sin > 1e-12)
+    rotateAbout(carried, { x: kx / sin, y: ky / sin, z: kz / sin }, Exact.atan2(sin, cos));
+  const cx = carried.y * pole.z - carried.z * pole.y;
+  const cy = carried.z * pole.x - carried.x * pole.z;
+  const cz = carried.x * pole.y - carried.y * pole.x;
+  return Exact.atan2(
+    cx * dir.x + cy * dir.y + cz * dir.z,
+    carried.x * pole.x + carried.y * pole.y + carried.z * pole.z,
+  );
+}
+
+const fromDir = vec3();
+const fromPole = vec3();
+const toDir = vec3();
+const toPole = vec3();
+const atDir = vec3();
+const atPole = vec3();
+
+/**
+ * A knee's or elbow's swivel `e` of the way from pose `a` to `b`, in `at`
+ * (the blended pose): so the way it bends turns steadily between them, not
+ * the swivel. The swivel is measured from a pole that follows the limb, and
+ * near the limb's hinge that pole turns fast (it has to, somewhere); a
+ * swivel blended straight would swing the joint round between two keys
+ * that both have it right. So the turn the pole makes is taken out: from
+ * `a`'s pole carried along with the limb (by the least turn), the bend
+ * blends from `a`'s to `b`'s. Where the limb holds still it is the straight
+ * blend; on the keys, the keys' own swivels.
+ */
+export function steadySwivel(a: Pose, b: Pose, at: Pose, limb: LimbName, e: number): number {
+  const from = a.swivel?.[limb] ?? 0;
+  const to = b.swivel?.[limb] ?? 0;
+  bendFrame(a, limb, fromDir, fromPole);
+  bendFrame(b, limb, toDir, toPole);
+  bendFrame(at, limb, atDir, atPole);
+  const toDrift = poleDrift(fromDir, fromPole, toDir, toPole);
+  const atDrift = poleDrift(fromDir, fromPole, atDir, atPole);
+  // The bend turns the short way from a's to b's (only two keys bent opposite ways are
+  // unclear), plus the whole turns the swivels themselves are keyed apart by.
+  const TAU = 2 * Math.PI;
+  const wrap = (x: number) => x - TAU * Math.round(x / TAU);
+  const turn = wrap(to + toDrift - from) + TAU * Math.round((to - from) / TAU);
+  // Nearest the straight blend: on the keys, their own swivels.
+  return nearestAngle(from + turn * e - atDrift, lerp(from, to, e));
+}
+
 /**
  * The end segment (hand or foot) from `end`, `length` long, into `tip`. Its
  * direction is set in the limb's bend plane: from the last bone `mid` → `end`
@@ -704,12 +857,23 @@ const fside = vec3();
 const joint = vec3();
 
 /**
+ * How the thumb curls. Its base joint swings it across the front of the palm
+ * (`oppose`, radians per radian of curl, about the hand's length); the two
+ * joints past it bend it over the fingers (`flex`, each bone's share of the
+ * curl, base first), mostly toward the little finger and a little back from
+ * the palm (`toward`), so in a fist (curl 0.7) its tip lies across the index
+ * and middle fingers rather than standing out of the palm. `lift` is how far
+ * in front of the palm it leaves the wrist, open.
+ */
+const THUMB = { lift: 0.3, oppose: 1.5, flex: [0, 0.25, 1], toward: -0.5 } as const;
+
+/**
  * Lays out a hand's fingers from the wrist (`end`) and the hand's frame
  * (`handDir`, `back`; `endSegment` first), calling `put` for each joint.
  * Each finger leaves its base along the hand, fanned toward the thumb by its
  * rest angle plus the spread, then bends toward the palm by its curl at each
  * of its joints. The thumb leaves by the wrist, angled out across the palm,
- * and curls across it toward the little finger.
+ * and curls across it toward the little finger (`THUMB`).
  */
 function layOutFingers(
   pose: Pose,
@@ -738,7 +902,7 @@ function layOutFingers(
     if (finger === "thumb") {
       // Out across the palm's front, more so as the hand spreads.
       fan = shape.fan + spread;
-      const lift = 0.5;
+      const lift = THUMB.lift;
       fdir.x = handDir.x * Exact.cos(fan) + across.x * Exact.sin(fan) + palm.x * lift;
       fdir.y = handDir.y * Exact.cos(fan) + across.y * Exact.sin(fan) + palm.y * lift;
       fdir.z = handDir.z * Exact.cos(fan) + across.z * Exact.sin(fan) + palm.z * lift;
@@ -752,11 +916,12 @@ function layOutFingers(
     fdir.x /= l;
     fdir.y /= l;
     fdir.z /= l;
+    if (finger === "thumb") rotateAbout(fdir, handDir, -k * THUMB.oppose * curl);
     // Which way it curls: toward the palm, or for the thumb, across it.
     if (finger === "thumb") {
-      fpalm.x = palm.x - across.x;
-      fpalm.y = palm.y - across.y;
-      fpalm.z = palm.z - across.z;
+      fpalm.x = palm.x * THUMB.toward - across.x;
+      fpalm.y = palm.y * THUMB.toward - across.y;
+      fpalm.z = palm.z * THUMB.toward - across.z;
     } else {
       fpalm.x = palm.x;
       fpalm.y = palm.y;
@@ -776,7 +941,7 @@ function layOutFingers(
     fside.z = fdir.x * fpalm.y - fdir.y * fpalm.x;
     put(joints[0], joint);
     for (let b = 0; b < 3; b++) {
-      rotateAbout(fdir, fside, curl);
+      rotateAbout(fdir, fside, finger === "thumb" ? curl * THUMB.flex[b] : curl);
       const bone = shape.bones[b] * length;
       joint.x += fdir.x * bone;
       joint.y += fdir.y * bone;

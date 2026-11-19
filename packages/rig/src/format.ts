@@ -1,9 +1,10 @@
-import { LIMBS, type Pose, type Target } from "./pose.ts";
+import { LIMBS, REST_POSE, type Pose, type Target } from "./pose.ts";
 import { DEFAULT_PROPORTIONS, JOINT_NAMES, type JointName, type Proportions } from "./skeleton.ts";
 import {
   CHANNELS,
   EASINGS,
   fromCarryOver,
+  mergePose,
   setCurve,
   setsChannel,
   type Channel,
@@ -41,9 +42,11 @@ import {
  *    spine side-bend on its own (`upperRoll`). The same again.
  * 9. Collarbones: each shoulder shrugs and reaches (`shrug`, `reach`).
  *    The same again.
+ * 10. The whole body can turn about the way it faces (`bank`), as a
+ *    cartwheel does. The same again.
  */
 export const FORMAT = "rig-editor";
-export const VERSION = 9;
+export const VERSION = 10;
 
 export interface Project {
   format: typeof FORMAT;
@@ -53,6 +56,13 @@ export interface Project {
   fps: number;
   proportions: Proportions;
   moves: Move[];
+  /**
+   * The editor's rest pose for this project: what new moves start from and
+   * Reset pose returns to. Left out, it's the built-in one. Only the editor
+   * reads it (a move's unset channels are still `REST_POSE`'s), so it went
+   * in without a version bump.
+   */
+  rest?: Pose;
 }
 
 export class FormatError extends Error {}
@@ -147,6 +157,10 @@ const MIGRATIONS: Record<number, (file: Raw) => Raw> = {
     // The collarbones are new: at rest where left out.
     return { ...file, version: 9 };
   },
+  9(file) {
+    // The whole-body bank is new: none where left out.
+    return { ...file, version: 10 };
+  },
 };
 
 /** Reads a project or move file of any version, migrating it to the current one. */
@@ -179,11 +193,12 @@ export function parseProject(data: unknown): Project {
     fps: int(file.fps, base.fps, 1),
     proportions: readProportions(file.proportions),
     moves: Array.isArray(file.moves) ? file.moves.filter(isObject).map(readMove) : [],
+    ...(isObject(file.rest) ? { rest: mergePose(REST_POSE, readPose(file.rest)) } : {}),
   };
 }
 
 /** The most a move's Simplify may be (m); the editor's slider goes this far. */
-const MAX_SIMPLIFY = 0.2;
+const MAX_SIMPLIFY = 0.1;
 
 /** Legs (thigh + shin, m) a rig may have; past these it was measured in other units. */
 const LEGS = { min: 0.1, max: 4 };
@@ -264,6 +279,7 @@ const NUMBERS = [
   "bend",
   "yaw",
   "pitch",
+  "bank",
   "roll",
   "upperRoll",
   "spineTwist",
