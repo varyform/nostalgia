@@ -286,12 +286,12 @@ export function createRenderer(cv) {
     const [lit, mid, dark] = TH.stone;
 
     // its reflection in the sea
-    const yw = PY(0, R, seaH);
-    if (yw < ch) {
+    // (none once the tower has sunk under the waterline: a negative depth would fill upward)
+    const yw = PY(0, R, seaH), depth = Math.min(ch - yw + 4 * u, (Math.min(top, hHi) - seaH) * RH);
+    if (yw < ch && depth > 0) {
       g.save();
       g.globalAlpha = 0.32;
       const grad = bodyGrad(cx - R, cx + R, TH.stone);
-      const depth = Math.min(ch - yw + 4 * u, (Math.min(top, hHi) - seaH) * RH);
       for (let y = 0; y < depth; y += 5 * u) {
         const off = Math.sin(y * 0.045 / u + t * 2.2) * (2 + y * 0.03) * u;
         g.save(); g.translate(off, 0); g.fillStyle = grad;

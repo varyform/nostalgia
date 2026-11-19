@@ -51,6 +51,6 @@ export function kitePilot(sim) {
   // where the kite will be when it gets there, falling gently on its own
   const lead = Math.max(0, (g.x - kx) / BONUS.speed);
   const ahead = b.ky + b.vy * Math.min(lead, 0.25);
-  const want = g.y - ahead;
+  const want = g.y + BONUS.hang * 0.4 - ahead; // the sea-glass into the middle of the rig
   return fromBits(want > 0.15 ? 4 : want < -0.25 ? 8 : 0);
 }

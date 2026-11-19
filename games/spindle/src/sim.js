@@ -30,7 +30,9 @@ export const P = {
   slipAcc: 3.2, coyote: 0.1, buffer: 0.12, lift: 3, shotV: 11, shotLife: 0.34, fireCd: 0.3,
   door: 1.1, crumble: 0.45, regrow: 7, blink: 3.2, blinkOn: 2, inv: 1.6, ready: 1.8,
 };
-export const BONUS = { dur: 22, speed: 3, h: 6, top: 5.6, low: 0.35, kx: 3 };
+// hang: how far Clink's boots swing under the kite (the renderer draws them 2.45 rows below: 1.1
+// units); the whole rig, kite to boots, catches the sea-glass
+export const BONUS = { dur: 22, speed: 3, h: 6, top: 5.6, low: 0.35, kx: 3, hang: 1.1 };
 
 const wrap = th => { const t = th % COLS; return t < 0 ? t + COLS : t; };
 export const colOf = th => { const c = Math.floor(th) % COLS; return c < 0 ? c + COLS : c; };
@@ -607,7 +609,8 @@ export function createSim() {
       b.skim = Math.max(0, b.skim - DT);
       const kx = b.x + BONUS.kx;
       for (const g of b.gems) {
-        if (g.got || Math.abs(g.x - kx) > 0.42 || Math.abs(g.y - b.ky) > 0.5) continue;
+        const dy = g.y - b.ky;
+        if (g.got || Math.abs(g.x - kx) > 0.42 || dy > 0.5 || dy < -BONUS.hang - 0.15) continue;
         g.got = true; b.got++; b.streak++;
         score(SCORE.gem, g.x, g.y, false);
         emit('gem', { streak: b.streak, x: g.x, y: g.y });
