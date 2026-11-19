@@ -107,6 +107,13 @@ export interface Pose {
    * turns the palm in, then back (π/2 faces the thigh), for either hand.
    */
   twist?: Partial<Record<HandName, number>>;
+  /**
+   * The collarbones: each shoulder raised (positive) or dropped about the
+   * top of the spine, radians, as a shrug lifts it, and brought forward
+   * (positive) or drawn back, as a reach rounds it. The arm goes with it.
+   */
+  shrug?: Partial<Record<HandName, number>>;
+  reach?: Partial<Record<HandName, number>>;
   /** Bend at each of a finger's three joints, radians: 0 straight, positive toward the palm. */
   curl?: Partial<Record<FingerName, number>>;
   /** Fans a hand's fingers apart (positive) or together, radians; the thumb swings out with it. */
@@ -148,6 +155,8 @@ export const clonePose = (p: Pose): Pose => ({
   swivel: { ...p.swivel },
   flex: { ...p.flex },
   twist: { ...p.twist },
+  shrug: { ...p.shrug },
+  reach: { ...p.reach },
   curl: { ...p.curl },
   spread: { ...p.spread },
   toes: { ...p.toes },
@@ -254,6 +263,8 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
     swivel: lerpRecord(LIMBS, a.swivel, b.swivel, t),
     flex: lerpRecord(LIMBS, a.flex, b.flex, t),
     twist: lerpRecord(HANDS, a.twist, b.twist, t),
+    shrug: lerpRecord(HANDS, a.shrug, b.shrug, t),
+    reach: lerpRecord(HANDS, a.reach, b.reach, t),
     curl: lerpRecord(FINGER_NAMES, a.curl, b.curl, t),
     spread: lerpRecord(HANDS, a.spread, b.spread, t),
     toes: lerpRecord(FEET, a.toes, b.toes, t),
@@ -327,6 +338,9 @@ const chestUp = vec3();
 const armHinge = vec3();
 /** The hinge the knees bend about: body z. */
 const LEG_HINGE: Vec3 = { x: 0, y: 0, z: 1 };
+/** Each shoulder from the chest (near, far), on its collarbone. */
+const collarNear = vec3();
+const collarFar = vec3();
 /** The hips' sideways axis, turned with the hip tilt. */
 const hipSide = vec3();
 const root = vec3();
@@ -386,6 +400,25 @@ function layOutSpine(pose: Pose, props: Proportions): void {
   armHinge.y = 0;
   armHinge.z = 1;
   rotateAbout(armHinge, chestUp, -twist);
+  // Each shoulder half the shoulders' width from the chest, raised toward the chest's up
+  // by its shrug and swung toward its front (up × side) by its reach.
+  const fx = chestUp.y * side.z - chestUp.z * side.y;
+  const fy = chestUp.z * side.x - chestUp.x * side.z;
+  const fz = chestUp.x * side.y - chestUp.y * side.x;
+  for (const hand of HANDS) {
+    const s = sideOf(hand);
+    const into = s > 0 ? collarNear : collarFar;
+    const half = props.shoulderWidth / 2;
+    const up = pose.shrug?.[hand] ?? 0;
+    const on = pose.reach?.[hand] ?? 0;
+    const cu = Exact.cos(up) * half;
+    const out = Exact.cos(on) * cu * s;
+    const ahead = Exact.sin(on) * cu;
+    const rise = Exact.sin(up) * half;
+    into.x = side.x * out + fx * ahead + chestUp.x * rise;
+    into.y = side.y * out + fy * ahead + chestUp.y * rise;
+    into.z = side.z * out + fz * ahead + chestUp.z * rise;
+  }
   const tilt = pose.hipTilt ?? 0;
   hipSide.x = 0;
   hipSide.y = -Exact.sin(tilt);
@@ -396,10 +429,10 @@ function layOutSpine(pose: Pose, props: Proportions): void {
 function limbRoot(limb: LimbName, props: Proportions, into: Vec3): void {
   const s = sideOf(limb);
   if (isArm(limb)) {
-    const half = (s * props.shoulderWidth) / 2;
-    into.x = chest.x + side.x * half;
-    into.y = chest.y + side.y * half;
-    into.z = chest.z + side.z * half;
+    const collar = s > 0 ? collarNear : collarFar;
+    into.x = chest.x + collar.x;
+    into.y = chest.y + collar.y;
+    into.z = chest.z + collar.z;
   } else {
     const half = (s * props.hipWidth) / 2;
     into.x = pelvis.x;
@@ -498,6 +531,36 @@ export function targetFromWorld(
     return { x: body.x - root.x, y: body.y - root.y, z: body.z - root.z };
   }
   return { x: body.x, y: body.y, z: body.z - (sideOf(limb) * props.hipWidth) / 2 };
+}
+
+/**
+ * The collarbone angles (shrug and reach) that point a shoulder from the
+ * chest toward a world point, the rest of the pose as it is.
+ */
+export function collarFromWorld(
+  pose: Pose,
+  props: Proportions,
+  hand: HandName,
+  point: Vec3,
+  at: Placement = ORIGIN,
+): { shrug: number; reach: number } {
+  layOutSpine(pose, props);
+  const b = toBody(pose, point, at);
+  const dx = b.x - chest.x;
+  const dy = b.y - chest.y;
+  const dz = b.z - chest.z;
+  const s = sideOf(hand);
+  const out = (dx * side.x + dy * side.y + dz * side.z) * s;
+  const rise = dx * chestUp.x + dy * chestUp.y + dz * chestUp.z;
+  // Forward: up × side.
+  const ahead =
+    dx * (chestUp.y * side.z - chestUp.z * side.y) +
+    dy * (chestUp.z * side.x - chestUp.x * side.z) +
+    dz * (chestUp.x * side.y - chestUp.y * side.x);
+  return {
+    shrug: Exact.atan2(rise, Exact.hypot(out, ahead)),
+    reach: Exact.atan2(ahead, out),
+  };
 }
 
 /** The pelvis position that puts the pelvis at a world point. */

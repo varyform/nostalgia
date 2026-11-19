@@ -39,9 +39,11 @@ import {
  *    Refused by older readers for the same reason.
  * 8. The chest can turn against the hips (`spineTwist`) and the upper
  *    spine side-bend on its own (`upperRoll`). The same again.
+ * 9. Collarbones: each shoulder shrugs and reaches (`shrug`, `reach`).
+ *    The same again.
  */
 export const FORMAT = "rig-editor";
-export const VERSION = 8;
+export const VERSION = 9;
 
 export interface Project {
   format: typeof FORMAT;
@@ -140,6 +142,10 @@ const MIGRATIONS: Record<number, (file: Raw) => Raw> = {
   7(file) {
     // The spine's twist and upper side-bend are new: none where left out.
     return { ...file, version: 8 };
+  },
+  8(file) {
+    // The collarbones are new: at rest where left out.
+    return { ...file, version: 9 };
   },
 };
 

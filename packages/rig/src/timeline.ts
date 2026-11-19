@@ -97,6 +97,8 @@ export const GROUPS = {
   swivel: LIMBS,
   flex: LIMBS,
   twist: HANDS,
+  shrug: HANDS,
+  reach: HANDS,
   curl: FINGER_NAMES,
   spread: HANDS,
   toes: FEET,
@@ -130,6 +132,8 @@ export type GroupChannel =
   | `swivel.${LimbName}`
   | `flex.${LimbName}`
   | `twist.${HandName}`
+  | `shrug.${HandName}`
+  | `reach.${HandName}`
   | `curl.${FingerName}`
   | `spread.${HandName}`
   | `toes.${FootName}`;
