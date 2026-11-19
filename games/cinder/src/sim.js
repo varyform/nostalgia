@@ -64,6 +64,9 @@ export const GATE = { shut: [1.1, 0.9], rise: 0.9, open: [1.6, 1.0], shake: 0.55
 // shoots while Wren is within `range` m in front of it and no foe is out
 export const ARCHER = { draw: 0.95, vx: -9, range: 24, near: 1.5, dmg: 1 };
 
+// held attacks: the pause after a strike's window before the next, where in its windup the
+// next one starts (a fraction of `on`), and how many kicks run together
+const CHAIN = { gap: 0.05, punch: 0.15, kick: 0.3, kicks: 3 };
 const FREE = new Set(['idle', 'walk', 'run', 'block', 'blockLow', 'duck', 'cheer']);
 const HELD = new Set(['block', 'blockLow', 'duck']);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -88,7 +91,7 @@ function pick(s, weights) {
 function fighter(id, kind, x, face, stance) {
   const K = KINDS[kind];
   return {
-    id, kind, x, face, stance, hp: K.hp, maxHp: K.hp, move: 'idle', moveT: 0, phase: 0,
+    id, kind, x, face, stance, hp: K.hp, maxHp: K.hp, move: 'idle', moveT: 0, phase: 0, chain: 0, arm: 1,
     active: kind === 'hero', down: false, flash: 0,
     // additive: the foe's flow ('wait' | 'arrive' | 'bow' | 'ready' | 'fight' | 'down'; the hero: 'hero'),
     // its attack tempo, a knock-back velocity and the AI's working fields
@@ -133,8 +136,9 @@ export function createSim() {
 
   // ---------- fighters ----------
   function set(f, move) {
-    f.move = move; f.moveT = 0;
+    f.move = move; f.moveT = 0; f.chain = 0;
     if (isAttack(move)) { f.struck = false; f.atk = ++sim.s.atkId; emit('swing', { who: f.id, move }); }
+    if (move.startsWith('punch')) f.arm = 1 - (f.arm ?? 1); // punches take the arms in turn (render)
   }
   const live = f => f.ai !== 'wait' && f.ai !== 'down';
   const out = () => sim.s.foes.find(live) || null;
@@ -172,7 +176,8 @@ export function createSim() {
   function stride(f, dx) {
     if (!dx) return;
     const was = Math.floor(f.phase * 2);
-    f.phase = (((f.phase + Math.abs(dx) / (f.stance === 'run' ? P.strideRun : P.strideWalk)) % 1) + 1) % 1;
+    // signed by facing: a step back runs the cycle backwards, so the planted feet stay put
+    f.phase = (((f.phase + (dx * f.face) / (f.stance === 'run' ? P.strideRun : P.strideWalk)) % 1) + 1) % 1;
     if (Math.floor(f.phase * 2) !== was) emit('step', { who: f.id, x: f.x });
   }
 
@@ -247,6 +252,20 @@ export function createSim() {
     if (s.buf && (s.buf.t -= DT) < 0) s.buf = null;
     const dirIn = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
     const foe = out(), near = foe && Math.abs(foe.x - h.x) < P.near ? foe : null;
+    // a held button chains: punches go on, arm after arm, for as long as it's held; kicks come
+    // three in a row, each from the knee still raised from the last, then back to the guard.
+    // The next one starts part-way into its windup (the arm or knee is already drawn back).
+    if (h.stance === 'guard' && (h.move.startsWith('punch') || h.move.startsWith('kick'))) {
+      const btn = h.move.startsWith('kick') ? 'kick' : 'punch', M = MOVES[h.move];
+      if (inp[btn] && h.moveT >= M.off + CHAIN.gap && (btn === 'punch' || h.chain < CHAIN.kicks - 1)) {
+        const next = attackOf(btn, inp.up ? 'high' : inp.down ? 'low' : 'mid'), n = h.chain + 1;
+        if (near) h.face = sign(near.x - h.x);
+        set(h, next);
+        h.chain = n; h.moveT = MOVES[next].on * CHAIN[btn];
+        s.buf = null;
+        return;
+      }
+    }
     if (!FREE.has(h.move)) return;
     if (h.stance === 'guard' && foe && Math.abs(foe.x - h.x) < 6) h.face = sign(foe.x - h.x);
     const any = dirIn || inp.down || inp.up || s.buf;
@@ -272,12 +291,15 @@ export function createSim() {
     const a = s.archer;
     const side = near ? sign(near.x - h.x) : a && h.x < a.x - ARCHER.near && (a.st === 'draw' || s.darts.some(d => d.x > h.x)) ? 1 : 0;
     const away = side && dirIn === -side;
+    // what "away" guards against: a foe's blow on its way (windup or strike), or a dart
+    const threat = near ? isAttack(near.move) && near.moveT < MOVES[near.move].off : !!side;
     if (h.stance === 'guard') {
       if (inp.down && away) { h.face = side; return hold(h, 'blockLow'); }
       if (inp.down) return hold(h, 'duck');
-      if (away) { h.face = side; return hold(h, 'block'); }
+      if (away && threat) { h.face = side; return hold(h, 'block'); }
+      // the guard never turns round: back is a step back, facing the same way (as in a
+      // fighting game, holding back also blocks whatever comes meanwhile, above)
       if (dirIn) {
-        if (!near) h.face = dirIn;
         if (h.move !== 'walk') set(h, 'walk');
         return moveHero(dirIn * P.walk * DT);
       }

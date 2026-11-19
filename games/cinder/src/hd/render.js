@@ -159,10 +159,9 @@ export function createRenderer(cv, app0) {
   function drawLamps(cam, t, front) {
     const { cw, P, GY, u } = ui, half = cw / P / 2 + 2;
     for (const l of lampsIn(L, cam - half, cam + half)) {
-      // stone lanterns stand behind the path; hanging ones and braziers in the hall itself
+      // all stand on the floor line, behind the fighters
       if (front) drawShine(g, L, SX(l.x), GY + SY, P, t, l.k);
-      else if (L.th.lamps.kind === 'stone') drawLamp(g, L, cw / 2 + (SX(l.x) - cw / 2) * 0.9, GY + SY - 0.22 * P, P * 0.78, t, l.k, u);
-      else drawLamp(g, L, SX(l.x), GY + SY, P, t, l.k, u);
+      else drawLamp(g, L, SX(l.x), GY + SY, L.th.lamps.kind === 'stone' ? P * 0.9 : P, t, l.k, u);
     }
   }
   function drawGateFrame(gt) {
@@ -290,7 +289,7 @@ export function createRenderer(cv, app0) {
       target = f.down && f.move !== 'ko' ? poseFor({ ...f, move: 'ko', moveT: 99 }, kind, { t, hitH: m.hitH }) : poseFor(ff, kind, { t, hitH: m.hitH });
     }
     const mv = forced ? 'forced' : f.move, T = f.moveT ?? 0;
-    if (mv !== m.move || T < m.moveT - 1e-4) { m.from = m.last; m.move = mv; m.bd = blendFor(mv); }
+    if (mv !== m.move || T < m.moveT - 1e-4) { m.from = m.last; m.move = mv; m.bd = blendFor(mv, f); }
     m.moveT = T;
     const pose = m.from && T < m.bd ? lerpPose(m.from, target, ease(clamp(T / m.bd, 0, 1))) : target;
     m.last = { ...pose };

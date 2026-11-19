@@ -27,10 +27,13 @@ export const STRIDE = { walk: 0.7, run: 1.7 }; // = the sim's P.strideWalk / P.s
 
 // ---------- the stances ----------
 const GUARD = P({ hy: 0.85, t: 10, n: 4, la: 62, le: 78, ra: 22, re: 118, lx: 0.3, rx: -0.3, rf: 8 });
+// Wren's: a wide, low straddle, side-on and upright, the lead fist out at the shoulder and the
+// rear one drawn in at the chest
+const WIDE = P({ hy: 0.76, t: -2, n: 2, la: 44, le: 74, ra: 14, re: 130, lx: 0.44, rx: -0.46, lf: -4, rf: -4 });
 const READY = P({ hy: 0.95, t: 3, n: 2, la: 4, le: 20, ra: -6, re: 25, lx: 0.07, rx: -0.07 });
 // each kind holds its guard its own way
 const GUARDS = {
-  hero: GUARD,
+  hero: WIDE,
   footman: with_(GUARD, { t: 12, la: 58, le: 74 }),
   brawler: with_(GUARD, { hy: 0.8, t: 18, n: 8, lx: 0.36, rx: -0.36, la: 48, le: 88, ra: 16, re: 112 }),
   adept: with_(GUARD, { hy: 0.86, t: 4, la: 80, le: 30, op: 0.8, lx: 0.4, rx: -0.3, ra: 30, re: 100 }),
@@ -44,9 +47,9 @@ const A = (g, wind, strike, follow = {}) => {
   return [with_(g, wind), s, with_(s, follow)];
 };
 const ATTACKS = {
-  punchHigh: g => A(g, { hx: -0.04, t: 5, ra: -18, re: 128 }, { hx: 0.08, t: 14, n: 0, ra: 104, re: 4, la: 30, le: 116, lx: 0.36, rx: -0.36, rf: 28 }, { ra: 98, re: 14 }),
-  punchMid: g => A(g, { hx: -0.04, t: 6, ra: -16, re: 124 }, { hx: 0.09, t: 16, n: 2, ra: 86, re: 2, la: 30, le: 116, lx: 0.36, rx: -0.36, rf: 28 }, { ra: 82, re: 12 }),
-  punchLow: g => A(g, { hy: 0.8, t: 20, ra: -10, re: 120 }, { hx: 0.1, hy: 0.74, t: 32, n: -8, ra: 58, re: 2, la: 38, le: 110, lx: 0.4, rx: -0.36, rf: 22 }, { ra: 54, re: 10 }),
+  punchHigh: g => A(g, { hx: -0.04, t: 5, ra: -18, re: 128 }, { hx: 0.1, t: 12, n: 0, ra: 100, re: 4, la: -12, le: 120, lx: 0.53, rx: -0.42, rf: 20 }, { ra: 96, re: 12 }),
+  punchMid: g => A(g, { hx: -0.04, t: 6, ra: -16, re: 124 }, { hx: 0.11, t: 14, n: 2, ra: 88, re: 2, la: -12, le: 120, lx: 0.54, rx: -0.42, rf: 20 }, { ra: 84, re: 10 }),
+  punchLow: g => A(g, { hy: 0.8, t: 20, ra: -10, re: 120 }, { hx: 0.12, hy: 0.72, t: 30, n: -8, ra: 58, re: 2, la: -8, le: 116, lx: 0.55, rx: -0.42, rf: 18 }, { ra: 54, re: 10 }),
   kickHigh: g => A(g, { hy: 0.9, t: -4, lx: 0.02, rx: 0.12, ry: 0.62, rf: 30, la: 70, le: 80, ra: 10, re: 110 }, { hx: -0.04, hy: 0.92, t: -28, n: 12, lx: -0.02, rx: 0.7, ry: 1.38, rf: 5, la: 80, le: 70, ra: -40, re: 50 }, { rx: 0.62, ry: 1.3 }),
   kickMid: g => A(g, { hy: 0.88, t: -2, lx: 0.02, rx: 0.14, ry: 0.5, rf: 30, la: 70, le: 80, ra: 10, re: 110 }, { hx: -0.04, hy: 0.9, t: -16, n: 8, lx: -0.02, rx: 0.8, ry: 0.88, rf: 10, la: 78, le: 74, ra: -34, re: 56 }, { rx: 0.72, ry: 0.84 }),
   kickLow: g => A(g, { hy: 0.84, t: 4, lx: 0.04, rx: 0.08, ry: 0.3, rf: 20, la: 66, le: 84, ra: 14, re: 112 }, { hy: 0.76, t: 8, n: 4, lx: 0.0, rx: 0.62, ry: 0.18, rf: -5, la: 70, le: 70, ra: -24, re: 70 }, { rx: 0.56 }),
@@ -159,10 +162,18 @@ export function poseFor(f, kind, ctx) {
   if (ATTACKS[m]) {
     const M = MOVES?.[m] ?? {}, D = M.dur || 0.45, on = M.on ?? D * 0.4, off = M.off ?? on + D * 0.2;
     let [w, s, fo] = ATTACKS[m](g);
+    // the lead arm's turn (fighter.arm 1): it strikes, and the rear fist goes back to the hip
+    if (f.arm === 1 && m.startsWith('punch')) {
+      const back = { ra: -12, re: 120 };
+      w = with_(w, { la: 34, le: 124, ra: g.ra, re: g.re });
+      s = with_(s, { la: s.ra - 4, le: s.re, ...back, lx: s.lx + 0.04 });
+      fo = with_(fo, { la: fo.ra - 4, le: fo.re, ...back, lx: s.lx });
+    }
     const kk = ATTACK_KIND[kind];
     if (kk) { w = with_(w, { t: w.t + (kk.t ?? 0), hy: w.hy + (kk.hy ?? 0) }); s = with_(s, { t: s.t + (kk.t ?? 0), hy: s.hy + (kk.hy ?? 0), op: kk.op ?? s.op }); fo = with_(fo, { op: kk.op ?? fo.op }); }
     const hold = on * 0.72;
-    if (T < hold) return lerpPose(g, w, EASE.io(cl(T / hold)));
+    // a chained kick starts from the raised knee, not the guard
+    if (T < hold) return f.chain && m.startsWith('kick') ? w : lerpPose(g, w, EASE.io(cl(T / hold)));
     if (T < on) return lerpPose(w, s, EASE.in(cl((T - hold) / (on - hold))));
     if (T < off) return lerpPose(s, fo, cl((T - on) / Math.max(0.01, off - on)) * 0.5);
     const q = cl((T - off) / Math.max(0.01, D - off));
@@ -190,8 +201,9 @@ export function poseFor(f, kind, ctx) {
   }
 }
 /** how long the cross-fade into a move takes: strikes and blows snap, the rest settle */
-export function blendFor(m) {
-  if (ATTACKS[m]) return 0.05;
+export function blendFor(m, f) {
+  // a chained strike draws back from the last one's reach: a beat longer than a fresh snap
+  if (ATTACKS[m]) return f?.chain ? (m.startsWith('kick') ? 0.14 : 0.1) : 0.05;
   if (m === 'hit' || m === 'ko') return 0.05;
   if (m === 'walk' || m === 'run') return 0.16;
   if (m === 'stance') return 0.12;

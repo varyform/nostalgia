@@ -107,7 +107,7 @@ export function createPilot(sim, { skill = 0.75, seed = 7 } = {}) {
       if (hgt === 'low') out.down = true;
       return tap(kind);
     }
-    if (guardUp) return hold('block', out, away);
+    if (guardUp) return; // stand ready: holding back now would step away (it blocks once a swing comes)
     if (dist > MOVES.punchMid.reach - 0.15) out[toward] = true;
   }
   function guardFor(h) { return h === 'low' ? 'blockLow' : h === 'high' ? 'duck' : 'block'; }

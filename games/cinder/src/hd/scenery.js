@@ -80,9 +80,13 @@ export const THEMES = {
 // strips tile sideways: anything near an edge is painted again one strip-width over
 function tiled(W, fn) { for (const o of [-W, 0, W]) fn(o); }
 // a ridge line that wraps at W: whole sine periods plus a little hashed roughness
-function ridge(c, W, H, base, amp, seed, col, mist) {
+// a ridge's skyline: its height at x
+function ridgeY(W, base, amp, seed) {
   const ks = [1, 2, 3, 5, 8].map((k, i) => [k, hash(seed, i) * TAU, 1 / (i + 1.2)]);
-  const y = x => { let s = 0; for (const [k, ph, a] of ks) s += Math.sin((x / W) * TAU * k + ph) * a; return base - amp * (0.55 + 0.32 * s) - hash(seed, Math.round(x / 9) % Math.round(W / 9)) * amp * 0.05; };
+  return x => { let s = 0; for (const [k, ph, a] of ks) s += Math.sin((x / W) * TAU * k + ph) * a; return base - amp * (0.55 + 0.32 * s) - hash(seed, Math.round(x / 9) % Math.round(W / 9)) * amp * 0.05; };
+}
+function ridge(c, W, H, base, amp, seed, col, mist) {
+  const y = ridgeY(W, base, amp, seed);
   c.beginPath(); c.moveTo(0, H);
   for (let x = 0; x <= W; x += 6) c.lineTo(x, y(x));
   c.lineTo(W, H); c.closePath();
@@ -109,10 +113,11 @@ function roof(c, x, y, w, h, col, edge) {
   c.lineTo(x + w * 0.5, y); c.lineTo(x - w * 0.5, y); c.closePath(); c.fill();
   if (edge) { c.strokeStyle = edge; c.lineWidth = Math.max(1, h * 0.06); c.beginPath(); c.moveTo(x - w * 0.6, y - h * 0.15); c.quadraticCurveTo(x - w * 0.45, y - h * 0.05, x - w * 0.32, y - h * 0.7); c.stroke(); }
 }
-// the Keep on its crag: tiers of roofs with lit windows
-function keep(c, x, base, s, col, lit) {
+// the Keep on its crag: tiers of roofs with lit windows. The crag runs down to `foot`, so the
+// ridge painted over it afterwards hides where it meets the mountains
+function keep(c, x, base, s, col, lit, foot) {
   c.fillStyle = col;
-  c.beginPath(); c.moveTo(x - s * 2.4, base + s * 0.2); for (let k = 0; k <= 10; k++) { const q = k / 10, xx = x - s * 2.4 + q * s * 4.6, hh = Math.sin(q * Math.PI) ** 0.6 * s * 1.35 * (0.85 + hash(k, 77) * 0.3); c.lineTo(xx, base - hh); } c.lineTo(x + s * 2.2, base + s * 0.2); c.fill();
+  c.beginPath(); c.moveTo(x - s * 2.4, foot); for (let k = 0; k <= 10; k++) { const q = k / 10, xx = x - s * 2.4 + q * s * 4.6, hh = Math.sin(q * Math.PI) ** 0.6 * s * 1.35 * (0.85 + hash(k, 77) * 0.3); c.lineTo(xx, base - hh); } c.lineTo(x + s * 2.2, foot); c.fill();
   let y = base - s * 1.3, w = s * 1.4;
   for (let i = 0; i < 4; i++) {
     const h = s * (0.55 - i * 0.06);
@@ -207,8 +212,13 @@ export function buildLayers(name, cw, ch, P, GY) {
     if (!th.indoor) {
       th.ridges.forEach((col, i) => {
         const n = th.ridges.length, base = hz + i * FH * 0.06, amp = FH * (0.42 - i * 0.09) * (th.mid === 'court' ? 0.45 : 1);
-        const y = ridge(c, W, FH, base, amp, 11 + i * 7, col, th.mist);
-        if (i === 0 && th.mid === 'pines') keep(c, W * 0.62, y(W * 0.62) + 4 * u, 60 * u, mix(col, '#000000', 0.15), '#ffcf7a');
+        if (i === 0 && th.mid === 'pines') {
+          // behind the far ridge, sunk so only the crag's crown shows above it
+          const s = 52 * u, xk = W * 0.62, y = ridgeY(W, base, amp, 11);
+          let low = 0; for (let x = xk - s * 2.4; x <= xk + s * 2.2; x += 6) low = Math.max(low, y(x));
+          keep(c, xk, Math.min(low, y(xk) + s * 0.95), s, mix(col, '#000000', 0.15), '#ffcf7a', FH);
+        }
+        ridge(c, W, FH, base, amp, 11 + i * 7, col, th.mist);
         mistBand(c, W, base + FH * 0.02, FH * 0.05, th.mist, 0.35 - i * 0.06);
         void n;
       });
