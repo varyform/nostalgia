@@ -419,19 +419,30 @@ const stage = {
     this.snow?.el.remove();
     this.snow = null;
   },
-  // where the frame sits in the box: the viewport, scaled to fit and centred
-  boxTransform() {
+  // The demo runs at the viewport's width, but never taller than the box's shape: a portrait
+  // phone would otherwise preview its letterboxed game as a strip in the middle of the box.
+  // Playing, the frame is the whole viewport.
+  frameSize(full = false) {
+    const w = previewBox.clientWidth,
+      h = previewBox.clientHeight;
+    if (full || !w || !h) return { fw: innerWidth, fh: innerHeight };
+    return { fw: innerWidth, fh: Math.min(innerHeight, Math.round((innerWidth * h) / w)) };
+  },
+  // where a frame of that size sits in the box: scaled to fit and centred
+  boxTransform(full = false) {
     const r = previewBox.getBoundingClientRect(),
       b = previewBox.clientLeft,
       w = previewBox.clientWidth,
       h = previewBox.clientHeight,
-      k = Math.min(w / innerWidth, h / innerHeight);
-    return { k, x: (w - innerWidth * k) / 2, y: (h - innerHeight * k) / 2, left: r.left + b, top: r.top + b };
+      { fw, fh } = this.frameSize(full),
+      k = Math.min(w / fw, h / fh);
+    return { k, x: (w - fw * k) / 2, y: (h - fh * k) / 2, left: r.left + b, top: r.top + b };
   },
   fit(f) {
-    const { k, x, y } = this.boxTransform();
-    f.style.width = innerWidth + 'px';
-    f.style.height = innerHeight + 'px';
+    const { fw, fh } = this.frameSize(),
+      { k, x, y } = this.boxTransform();
+    f.style.width = fw + 'px';
+    f.style.height = fh + 'px';
     f.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
   },
   fitAll() {
@@ -449,10 +460,14 @@ const stage = {
     if (!reduceMotion.matches) {
       void f.offsetWidth;
       f.classList.add('is-zooming');
-      f.style.transform = 'none';
+      // full width, centred: where the game's picture sits once the frame takes the whole screen
+      f.style.transform = `translate(0px, ${(innerHeight - f.offsetHeight) / 2}px)`;
       await transitionEnd(f);
-    } else f.style.transform = 'none';
+    }
     f.classList.remove('is-zooming');
+    // the whole viewport from here on, rotations included (CSS sizes it while playing)
+    f.style.width = f.style.height = '';
+    f.style.transform = 'none';
     f.removeAttribute('aria-hidden');
     f.tabIndex = 0;
     document.title = `${g.title} · Nostalgia`;
@@ -466,7 +481,9 @@ const stage = {
     if (!f) return;
     // unlock first: a returning scrollbar moves the box, and the frame must land where it is now
     document.documentElement.classList.remove('is-playing');
-    const { k, x, y, left, top } = this.boxTransform();
+    f.style.width = innerWidth + 'px';
+    f.style.height = innerHeight + 'px';
+    const { k, x, y, left, top } = this.boxTransform(true);
     f.blur();
     if (!reduceMotion.matches) {
       f.classList.add('is-zooming');
