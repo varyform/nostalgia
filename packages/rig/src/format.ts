@@ -63,6 +63,12 @@ export interface Project {
    * in without a version bump.
    */
   rest?: Pose;
+  /**
+   * The folders the editor lists the moves in, in order (a move's `folder`
+   * names one), empty ones too. Only the editor reads them, so they went in
+   * without a version bump.
+   */
+  folders?: string[];
 }
 
 export class FormatError extends Error {}
@@ -81,6 +87,8 @@ export const moveFile = (project: Project, move: Move): Project => ({
   ...newProject(move.name, [move]),
   fps: project.fps,
   proportions: { ...project.proportions },
+  // Its folder, so importing it lists it there again.
+  ...(move.folder ? { folders: [move.folder] } : {}),
 });
 
 export const serialize = (project: Project): string => JSON.stringify(project, null, 2);
@@ -187,14 +195,27 @@ export function parseProject(data: unknown): Project {
     version = num(file.version, 0);
   }
   const base = newProject();
+  const moves = Array.isArray(file.moves) ? file.moves.filter(isObject).map(readMove) : [];
+  const folders = readFolders(file.folders, moves);
   return {
     ...base,
     name: typeof file.name === "string" && file.name ? file.name : base.name,
     fps: int(file.fps, base.fps, 1),
     proportions: readProportions(file.proportions),
-    moves: Array.isArray(file.moves) ? file.moves.filter(isObject).map(readMove) : [],
+    moves,
     ...(isObject(file.rest) ? { rest: mergePose(REST_POSE, readPose(file.rest)) } : {}),
+    ...(folders.length ? { folders } : {}),
   };
+}
+
+/** A folder's name as kept: trimmed, and none for an empty one. */
+export const folderName = (v: unknown): string | undefined =>
+  typeof v === "string" && v.trim() ? v.trim() : undefined;
+
+/** The file's folders, each once, and any a move names that the list left out. */
+function readFolders(raw: unknown, moves: readonly Move[]): string[] {
+  const listed = Array.isArray(raw) ? raw.map(folderName) : [];
+  return [...new Set([...listed, ...moves.map((m) => m.folder)])].filter((f): f is string => !!f);
 }
 
 /** The most a move's Simplify may be (m); the editor's slider goes this far. */
@@ -242,6 +263,8 @@ function readMove(raw: Raw): Move {
   if (typeof raw.simplify === "number" && raw.simplify >= 0) {
     move.simplify = Math.min(raw.simplify, MAX_SIMPLIFY);
   }
+  const folder = folderName(raw.folder);
+  if (folder) move.folder = folder;
   return move;
 }
 

@@ -91,6 +91,11 @@ export interface Move {
    * kept as authored; games can ignore it. Left out or 0, it's off.
    */
   simplify?: number;
+  /**
+   * The folder the editor lists it in (`Project.folders`). Only the editor
+   * reads it, so it went in without a version bump; games can ignore it.
+   */
+  folder?: string;
 }
 
 /** The parts of a pose that hold an angle per limb, hand or finger, and what they hold one for. */
