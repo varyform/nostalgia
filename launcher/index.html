@@ -524,7 +524,8 @@
           scrollbar-width: thin;
           scrollbar-color: var(--color-line) transparent;
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(220px, 30%);
+          /* the foot is at least as wide as Run and Share side by side */
+          grid-template-columns: minmax(0, 1fr) minmax(min-content, 30%);
           grid-template-areas: 'head head' 'blurb foot' 'facts foot';
           align-items: start;
           gap: clamp(12px, 2.4vh, 22px) 28px;
@@ -567,6 +568,7 @@
         /* the version switch and its note, then Run */
         .info__foot {
           grid-area: foot;
+          min-width: 220px;
           display: grid;
           align-content: start;
           gap: 12px;
@@ -616,10 +618,10 @@
             margin-bottom: 2px;
           }
         }
-        /* a narrow side column: just the switch and Run */
+        /* a narrow side column: just the switch, Run and Share */
         @container detail (max-width: 700px) {
           .info__foot .seg__note,
-          .info__foot .btn--ghost {
+          .info__foot .btn--ghost:not(.btn--share) {
             display: none;
           }
         }
@@ -760,6 +762,16 @@
           box-shadow:
             6px 6px 0 var(--shadow-hard),
             0 0 32px color-mix(in oklch, var(--color-primary) 60%, transparent);
+        }
+        /* Run and Share stay on one row; Source may wrap below */
+        .actions__main {
+          display: flex;
+          gap: 10px;
+        }
+        .btn--share {
+          padding: 0;
+          aspect-ratio: 1;
+          justify-content: center;
         }
         .btn--ghost {
           background: transparent;

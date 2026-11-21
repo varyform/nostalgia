@@ -4,6 +4,13 @@ import { createInput } from '@nostalgia/input';
 // ---------- catalogue: every games/<id>/game.json, plus the empty drive ----------
 const REPO = 'https://github.com/varyform/nostalgia/tree/main/games/';
 const GAMES = [...games, { id: 'empty', empty: true, exe: 'A:\\', title: 'Drive A:' }];
+// Share's icons: a chain link, and a tick once copied
+const icon = d =>
+  `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" aria-hidden="true">${d}</svg>`;
+const LINK = icon(
+  '<path d="M10 14l4-4M9 7l2-2a4 4 0 0 1 6 0 4 4 0 0 1 0 6l-2 2M15 17l-2 2a4 4 0 0 1-6 0 4 4 0 0 1 0-6l2-2"/>',
+);
+const TICK = icon('<path d="M5 12l5 5 9-10"/>');
 
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
@@ -212,7 +219,10 @@ function renderDetail() {
           <p class="seg__note">${v.note}</p>
         </div>
         <div class="actions">
-          <button class="btn btn--run" data-action="run">▶ Run ${g.exe}</button>
+          <span class="actions__main">
+            <button class="btn btn--run" data-action="run">▶ Run ${g.exe}</button>
+            <button class="btn btn--ghost btn--share" data-action="share" title="Copy a direct link to ${g.title}" aria-label="Share a direct link to ${g.title}">${LINK}</button>
+          </span>
           <a class="btn btn--ghost" href="${REPO}${g.id}" target="_blank" rel="noopener">Source</a>
         </div>
       </div>
@@ -573,6 +583,41 @@ const toggle = key => {
   beep(prefs[key] ? 1320 : 660, 0.04);
 };
 
+// ---------- share: a direct link to the game's own page, in the chosen version ----------
+// The iOS app runs an offline copy, so off the web the link points at the public site.
+const SITE = 'https://ogg.ol3h.org/';
+const coarse = matchMedia('(pointer: coarse)');
+async function share() {
+  const g = GAMES[index];
+  if (g.empty) return error();
+  const url = new URL(pageUrl(g, version(g)), /^https?:$/.test(location.protocol) ? location.href : SITE).href;
+  // phones and tablets get the share sheet; desktops a copy, which is what a link is for there
+  if (coarse.matches && navigator.share) {
+    try {
+      await navigator.share({ title: `${g.title} · Nostalgia`, url });
+      return;
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch {
+    prompt(`Link to ${g.title}`, url);
+    return;
+  }
+  beep(1320, 0.03);
+  const btn = $('.btn--share');
+  if (!btn) return;
+  btn.innerHTML = TICK;
+  btn.title = 'Link copied';
+  setTimeout(() => {
+    if (!btn.isConnected) return;
+    btn.innerHTML = LINK;
+    btn.title = `Copy a direct link to ${g.title}`;
+  }, 1600);
+}
+
 const help = $('#help');
 const actions = {
   help: () => {
@@ -586,6 +631,7 @@ const actions = {
   crt: () => toggle('crt'),
   fullscreen: () => fullscreen.supported && fullscreen.toggle(),
   run,
+  share,
   quit,
 };
 help.addEventListener('click', e => {
