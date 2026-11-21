@@ -19,9 +19,10 @@
 // under it, then goes on); the same jingle twice within a moment plays once.
 //
 // Effects take the event as opts (sfx(e.k, e)); opts.pan (-1…1) places a positional one. Names:
-// the sim's events (intro stance step swing hit block ko bow foe regen gateShake gateSlam crush
+// the sim's events (intro stance step swing hit block ko fall bow foe regen gateShake gateSlam crush
 // draw dart dartHit dartBlock clear die life win over), the menus' move pick back, and pause.
 import { adsr, compressor, createSynth, delay, distortion, limiter, line, midi, span } from '@nostalgia/audio';
+import { isKick, MOVES } from './moves.js';
 
 // chord tones for the koto (index 0…5 in an arp line), and the pad's three
 const ARP = {
@@ -310,7 +311,7 @@ export function createAudio({ on = true } = {}) {
       const thud = (f, t, dur, vol, out, o = {}) =>
         sub(f, t, dur, vol, { punch: 10, drop: 0.04, drive: 0.55, tone: 1400, attack: 0.001, decay: dur, sustain: 0, release: 0.05, bus: out, ...o });
       const HIGH = { high: 1.3, mid: 1, low: 0.76 }; // a strike's pitch by its height
-      const kick = m => (m ?? '').startsWith('kick');
+      const kick = m => isKick(m ?? '');
       const jingle = (t, name) => hold(t + JINGLES[name]);
       let foot = 0; // footfalls take turns, so a run doesn't hammer one sound
 
@@ -343,6 +344,11 @@ export function createAudio({ on = true } = {}) {
           if (m === 'palm') {
             hiss(t, 0.4, 0.28, 400, 2200, 'bandpass', out, 1.2, 0.25);
             tone(70, 110, t, 0.4, 0.04, 'sine', out, 0.2);
+          } else if (MOVES[m]?.fx) {
+            // a special: a long whoosh round the turn, rising into the blow
+            const on = MOVES[m].on;
+            hiss(t, on + 0.1, 0.4, 350 * h, 2400 * h, 'bandpass', out, 1.2, on * 0.8);
+            hiss(t + on - 0.06, 0.16, 0.5, 900 * h, 3800 * h, 'bandpass', out, 1.4, 0.04);
           } else if (kick(m)) hiss(t, 0.2, 0.55, 500 * h, 2600 * h, 'bandpass', out, 1.3, 0.07);
           else hiss(t, 0.09, 0.4, 1500 * h, 3600 * h, 'bandpass', out, 1.1, 0.025);
         },
@@ -353,6 +359,7 @@ export function createAudio({ on = true } = {}) {
           thud(f, t, k || palm ? 0.2 : 0.11, k || palm ? 0.36 : 0.28, out, { punch: k ? 12 : 9, drop: k ? 0.05 : 0.03 });
           hiss(t, 0.04, k ? 0.16 : 0.12, 4200 * h, 1600, 'bandpass', out, 0.9, 0.0008);
           hiss(t, 0.12, 0.05, 1400, 250, 'lowpass', out, 0.7, 0.002); // the body
+          if (e.fx) thud(f * 0.55, t + 0.02, 0.3, 0.3, out, { punch: 14, drop: 0.1, drive: 0.6 }); // a finisher's weight
           if (palm) {
             thud(48, t, 0.4, 0.3, out, { punch: 14, drop: 0.12 });
             hiss(t, 0.3, 0.06, 1600, 200, 'lowpass', hall, 0.7, 0.002);
@@ -375,6 +382,12 @@ export function createAudio({ on = true } = {}) {
           thud(70, t + 0.52, 0.15, 0.16 * big, out, { punch: 8, drop: 0.05, tone: 700 });
           hiss(t + 0.32, 0.7, 0.04, 1400, 200, 'lowpass', hall, 0.6, 0.05);
           hiss(t + 0.35, 0.5, 0.025, 600, 1600, 'bandpass', out, 1, 0.1); // the cloth settling
+        },
+        // knocked down (not out): the body on the boards, then the scuff of getting up
+        fall: (t, e, out) => {
+          hiss(t, 0.2, 0.04, 900, 2400, 'bandpass', out, 1, 0.12);
+          thud(58, t + 0.32, 0.35, 0.34, out, { punch: 12, drop: 0.08, drive: 0.45, tone: 800 });
+          hiss(t + 0.32, 0.4, 0.03, 1200, 250, 'lowpass', hall, 0.6, 0.04);
         },
         // a bow: two soft chimes, a fifth apart
         bow: (t, e, out) => {

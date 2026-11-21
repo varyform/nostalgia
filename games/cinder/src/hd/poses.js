@@ -23,7 +23,7 @@ const P = o => ({ ...Z, ...o });
 const with_ = (p, o) => ({ ...p, ...o });
 
 // the gaits' strides (metres per full cycle of fighter.phase), for the feet to stay put
-export const STRIDE = { walk: 0.7, run: 1.7 }; // = the sim's P.strideWalk / P.strideRun
+export const STRIDE = { walk: 0.7, run: 2.1 }; // = the sim's P.strideWalk / P.strideRun
 
 // ---------- the stances ----------
 const GUARD = P({ hy: 0.85, t: 10, n: 4, la: 62, le: 78, ra: 22, re: 118, lx: 0.3, rx: -0.3, rf: 8 });

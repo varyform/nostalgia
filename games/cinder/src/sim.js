@@ -10,11 +10,11 @@
 //   const sim = createSim();
 //   sim.newGame({ scene: 0, seed: 1 });
 //   sim.step({ right: true, punch: false, … });   // every DT; sim.events lists what happened
-import { MOVES, attackOf, isAttack } from './moves.js';
+import { MOVES, attackOf, isAttack, travelAt } from './moves.js';
 import { SCENES } from './scenes.js';
 
 export const DT = 1 / 60;
-export const SCORE = { pip: 100, ko: 500 /* × the foe's tier */, bow: 300, clear: 1000, win: 5000, life: 1500 };
+export const SCORE = { pip: 100, ko: 500 /* × the foe's tier */, bow: 300, clear: 1000, win: 5000, life: 1500, special: 200 /* a special that lands clean */ };
 export const P = {
   run: 2.6, walk: 1.05, // m/s in run stance · guard-stance step
   intro: 2, dead: 2.5, clear: 1.5, // seconds in each status
@@ -23,8 +23,10 @@ export const P = {
   near: 4, // a foe within this makes "away" a block instead of a step back
   regenR: 6, regenT: 0.9, // no foe within regenR: a pip back every regenT seconds in run stance
   buffer: 0.15, // a press made while busy still counts this long
-  strideRun: 1.7, strideWalk: 0.7, // metres per walk/run cycle (fighter.phase)
+  strideRun: 2.1, strideWalk: 0.7, // metres per walk/run cycle (fighter.phase)
   honour: 0.8, // a bow begun this long after the foe's own bow ends still answers it
+  tap: 0.25, // a second press of a direction this soon after the first is a double tap
+  lie: 0.45, lieFoe: 0.7, // seconds a knocked-down fighter lies before getting up (Wren: a press gets her up sooner)
 };
 // a fighter's kind: pips, attack tempo, speeds and, for foes, how it fights
 //   tier: KO score multiplier · want: the distance it fights from · react: seconds to read an attack
@@ -34,28 +36,29 @@ export const P = {
 //   counter: chance of striking straight back after a block · punish: of hitting Wren's recovery · hold: chance of standing in a guard
 //   adapt: chance it aims round the guard Wren is holding · palm: seconds between palm strikes
 //   power: pips its hits take on top of the move's own · chase: runs after Wren when she's 5 m off,
-//   taking its guard this close (none: it walks)
+//   taking its guard this close (none: it walks) · evade: chance a defence is a dodge (a sway, or with
+//   `flips` a backflip or cartwheel away) · pref: the attacks it picks, weighted (specials too)
 export const KINDS = {
   hero: { hp: 6, tempo: 1, walk: P.walk, run: P.run },
   footman: {
     hp: 6, tempo: 0.62, walk: 0.85, run: 2.1, tier: 1, want: 1.05, react: 0.22, guard: 0.35, right: 0.6,
     aggr: 0.7, think: 0.4, cool: 1.0, combo: 0, counter: 0, punish: 0.3, hold: 0, adapt: 0, chase: 1.6,
-    seq: ['punchMid', 'punchMid', 'punchHigh', 'kickMid'], // the footman's drill: always the same round
+    seq: ['punchMid', 'punchMid', 'punchHigh', 'kickMid', 'sweep'], // the footman's drill: always the same round
   },
   brawler: {
-    hp: 9, tempo: 0.7, walk: 1.0, run: 2.3, tier: 2, want: 1.4, react: 0.18, guard: 0.55, right: 0.75,
-    aggr: 0.9, think: 0.25, cool: 0.45, combo: 0.5, counter: 0.15, punish: 0.5, hold: 0, adapt: 0.35, chase: 3,
-    pref: { kickMid: 3, kickHigh: 2, kickLow: 2, punchMid: 2, punchHigh: 1 },
+    hp: 10, tempo: 0.7, walk: 1.0, run: 2.3, tier: 2, want: 1.4, react: 0.18, guard: 0.55, right: 0.75,
+    aggr: 0.9, think: 0.25, cool: 0.45, combo: 0.5, counter: 0.15, punish: 0.5, hold: 0, adapt: 0.35, chase: 3, evade: 0.1,
+    pref: { kickMid: 3, kickHigh: 2, kickLow: 2, punchMid: 2, punchHigh: 1, roundhouse: 2, uppercut: 1 },
   },
   adept: {
     hp: 11, tempo: 0.72, walk: 1.0, run: 2.3, tier: 3, want: 1.15, react: 0.12, guard: 0.85, right: 0.9,
-    aggr: 0.7, think: 0.3, cool: 0.7, combo: 0.35, counter: 0.7, punish: 0.7, hold: 0.45, adapt: 0.75,
-    pref: { punchMid: 3, punchHigh: 2, punchLow: 2, kickMid: 1, kickLow: 1 },
+    aggr: 0.7, think: 0.3, cool: 0.7, combo: 0.35, counter: 0.7, punish: 0.7, hold: 0.45, adapt: 0.75, evade: 0.4, flips: true,
+    pref: { punchMid: 3, punchHigh: 2, punchLow: 2, kickMid: 1, kickLow: 1, backKick: 2, sweep: 2, spinKick: 1 },
   },
   regent: {
-    hp: 22, tempo: 0.75, walk: 0.95, run: 2.0, tier: 6, want: 1.3, react: 0.13, guard: 0.8, right: 0.9,
-    aggr: 0.8, think: 0.3, cool: 0.55, combo: 0.45, counter: 0.4, punish: 0.6, hold: 0.25, adapt: 0.75, palm: 5, power: 0,
-    pref: { punchHigh: 2, punchMid: 2, kickMid: 2, kickLow: 2, kickHigh: 1 },
+    hp: 24, tempo: 0.75, walk: 0.95, run: 2.0, tier: 6, want: 1.3, react: 0.13, guard: 0.8, right: 0.9,
+    aggr: 0.8, think: 0.3, cool: 0.55, combo: 0.45, counter: 0.4, punish: 0.6, hold: 0.25, adapt: 0.75, palm: 5, power: 0, evade: 0.25, flips: true,
+    pref: { punchHigh: 2, punchMid: 2, kickMid: 2, kickLow: 2, kickHigh: 1, sideKick: 2, spinKick: 1, roundhouse: 1, uppercut: 1 },
   },
 };
 // drop gates: shut → rise → open → shake (the tell) → slam → shut; seconds, [base, + random]
@@ -67,7 +70,13 @@ export const ARCHER = { draw: 0.95, vx: -9, range: 24, near: 1.5, dmg: 1 };
 // held attacks: the pause after a strike's window before the next, where in its windup the
 // next one starts (a fraction of `on`), and how many kicks run together
 const CHAIN = { gap: 0.05, punch: 0.15, kick: 0.3, kicks: 3 };
+// three blows strung together end in a finisher: the string so far (P punch, K kick) and the
+// button that ends it
+const FINISH = { PPP: 'uppercut', PPK: 'roundhouse', KKK: 'spinKick' };
+const FINISHERS = new Set(Object.values(FINISH));
 const FREE = new Set(['idle', 'walk', 'run', 'block', 'blockLow', 'duck', 'cheer']);
+// down, or getting up: nothing lands
+const FLOORED = new Set(['fall', 'getup']);
 const HELD = new Set(['block', 'blockLow', 'duck']);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const sign = v => (v < 0 ? -1 : 1);
@@ -98,6 +107,7 @@ function fighter(id, kind, x, face, stance) {
     ai: kind === 'hero' ? 'hero' : 'wait', tempo: K.tempo, vx: 0, struck: false, atk: 0,
     think: 0, cd: 0, defend: null, reactAt: -1, seen: -1, holdTo: 0, palmT: K.palm || 0, seqI: 0,
     bowEnd: -9, honoured: false, wary: -1, punished: -1, counterAt: -1, combo: false, lastH: 'mid', want: K.want || 0, walkDir: 0,
+    str: '', // the hero's string of blows so far (FINISH)
   };
 }
 
@@ -136,7 +146,7 @@ export function createSim() {
 
   // ---------- fighters ----------
   function set(f, move) {
-    f.move = move; f.moveT = 0; f.chain = 0;
+    f.move = move; f.moveT = 0; f.chain = 0; f.lieT = 0;
     if (isAttack(move)) { f.struck = false; f.atk = ++sim.s.atkId; emit('swing', { who: f.id, move }); }
     if (move.startsWith('punch')) f.arm = 1 - (f.arm ?? 1); // punches take the arms in turn (render)
   }
@@ -190,9 +200,22 @@ export function createSim() {
       if (f.kind === 'hero') { const ph = f.phase; moveHero(dx); f.phase = ph; } else { const ph = f.phase; moveFoe(f, dx); f.phase = ph; }
     }
     const m = MOVES[f.move];
+    const t0 = f.moveT;
     f.moveT += DT * (isAttack(f.move) ? f.tempo : 1);
+    // a move that carries the fighter along (a flip, a flying kick, getting up)
+    if (m.travel) {
+      const dx = (travelAt(f.move, Math.min(f.moveT, m.dur)) - travelAt(f.move, t0)) * f.face, ph = f.phase;
+      if (f.kind === 'hero') moveHero(dx); else moveFoe(f, dx);
+      f.phase = ph;
+    }
     if (!m.dur || f.moveT < m.dur) return;
     if (f.move === 'ko') { f.moveT = m.dur; f.down = true; return; }
+    if (f.move === 'fall') {
+      // lying: up after a while (Wren sooner, at a press: heroStep)
+      f.moveT = m.dur;
+      if ((f.lieT = (f.lieT ?? 0) + DT) >= (f.kind === 'hero' ? P.lie : P.lieFoe)) set(f, 'getup');
+      return;
+    }
     const was = f.move;
     set(f, 'idle');
     if (was === 'bow' && f.kind !== 'hero') f.bowEnd = sim.s.t;
@@ -206,25 +229,35 @@ export function createSim() {
     if (a.moveT < m.on || a.moveT >= m.off || d.ai === 'down' || (d.kind !== 'hero' && d.ai !== 'fight')) return;
     const dx = d.x - a.x;
     if (sign(dx) !== a.face || Math.abs(dx) > m.reach) return;
-    a.struck = true;
     const s = sim.s, h = m.height, x = d.x - sign(dx) * 0.3;
+    // down, getting up or dodging: it passes by (and may still catch the dodge's end)
+    if (FLOORED.has(d.move) || evading(d, h)) return;
+    a.struck = true;
     if (d.move === 'duck' && h === 'high') return; // over the head
     if (!m.unblockable && ((d.move === 'block' && h !== 'low') || (d.move === 'blockLow' && h === 'low'))) {
-      emit('block', { who: d.id, x, h });
-      d.vx = sign(dx) * 1.0;
+      emit('block', { who: d.id, x, h, heavy: !!m.fx });
+      d.vx = sign(dx) * (m.fx ? 2.2 : 1.0);
       if (d.kind !== 'hero') blocked(d);
       return;
     }
     const was = d.hp, ko = open(d);
     d.hp = ko ? 0 : Math.max(0, d.hp - m.dmg - (KINDS[a.kind].power || 0));
     d.flash = 0.25;
-    emit('hit', { who: d.id, x, h, dmg: was - d.hp, move: a.move });
-    if (d.kind !== 'hero') s.score += SCORE.pip * (was - d.hp);
+    emit('hit', { who: d.id, x, h, dmg: was - d.hp, move: a.move, fx: m.fx });
+    if (d.kind !== 'hero') s.score += SCORE.pip * (was - d.hp) + (m.fx ? SCORE.special : 0);
     if (d.hp <= 0) return knockOut(d, sign(dx));
-    d.vx = sign(dx) * 2.6;
+    d.vx = sign(dx) * (m.fx === 'fall' ? 2.2 : 2.6);
     d.wary = s.t + 1.2;
+    d.str = '';
+    if (m.fx === 'fall') { set(d, 'fall'); return emit('fall', { who: d.id, x: d.x }); }
+    if (m.fx === 'spin') return set(d, 'spun');
     // the Regent doesn't flinch out of a palm strike: it lands unless Wren gets under it
     if (d.move !== 'palm') set(d, 'hit');
+  }
+  /** whether a fighter is dodging a blow at this height just now */
+  function evading(f, h) {
+    const e = MOVES[f.move]?.evade;
+    return !!e && f.moveT >= e[0] && f.moveT < e[1] && e[2].includes(h);
   }
   function knockOut(d, dir) {
     const s = sim.s;
@@ -252,21 +285,40 @@ export function createSim() {
     if (s.buf && (s.buf.t -= DT) < 0) s.buf = null;
     const dirIn = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
     const foe = out(), near = foe && Math.abs(foe.x - h.x) < P.near ? foe : null;
-    // a held button chains: punches go on, arm after arm, for as long as it's held; kicks come
-    // three in a row, each from the knee still raised from the last, then back to the guard.
-    // The next one starts part-way into its windup (the arm or knee is already drawn back).
-    if (h.stance === 'guard' && (h.move.startsWith('punch') || h.move.startsWith('kick'))) {
-      const btn = h.move.startsWith('kick') ? 'kick' : 'punch', M = MOVES[h.move];
-      if (inp[btn] && h.moveT >= M.off + CHAIN.gap && (btn === 'punch' || h.chain < CHAIN.kicks - 1)) {
-        const next = attackOf(btn, inp.up ? 'high' : inp.down ? 'low' : 'mid'), n = h.chain + 1;
+    // double taps: a direction pressed again soon after it was let go
+    const tapped = {};
+    for (const k of ['left', 'right', 'up']) {
+      if (inp[k] && !pv[k]) {
+        tapped[k] = s.taps?.[k] != null && s.t - s.taps[k] < P.tap;
+        (s.taps ??= {})[k] = tapped[k] ? null : s.t;
+      }
+    }
+    // down: lying, a press gets Wren up
+    if (h.move === 'fall') {
+      if (h.moveT >= MOVES.fall.dur && s.buf && h.lieT > 0.12) { s.buf = null; set(h, 'getup'); }
+      return;
+    }
+    // blows strung together: the next one comes as the last spends itself, for as long as its
+    // button is held or at a press meanwhile. Punches go arm after arm, kicks each from the
+    // knee still raised from the last (both part-way into their windups); three end in a
+    // finisher (FINISH), which strings nothing after it.
+    if (h.stance === 'guard' && isAttack(h.move) && !FINISHERS.has(h.move) && h.str) {
+      const M = MOVES[h.move], was = h.move.startsWith('kick') ? 'kick' : 'punch';
+      const btn = s.buf?.a === 'punch' || s.buf?.a === 'kick' ? s.buf.a : inp[was] ? was : null;
+      if (btn && h.moveT >= M.off + CHAIN.gap) {
+        const str = h.str + (btn === 'kick' ? 'K' : 'P');
+        const next = FINISH[str] ?? heroAttack(btn, inp, dirIn);
+        const n = next.startsWith(btn) ? h.chain + 1 : 0;
         if (near) h.face = sign(near.x - h.x);
         set(h, next);
-        h.chain = n; h.moveT = MOVES[next].on * CHAIN[btn];
+        h.str = FINISH[str] || !/^(punch|kick)/.test(next) ? '' : str;
+        if (n && (btn === 'punch' || n < CHAIN.kicks)) { h.chain = n; h.moveT = MOVES[next].on * CHAIN[btn]; }
         s.buf = null;
         return;
       }
     }
     if (!FREE.has(h.move)) return;
+    h.str = '';
     if (h.stance === 'guard' && foe && Math.abs(foe.x - h.x) < 6) h.face = sign(foe.x - h.x);
     const any = dirIn || inp.down || inp.up || s.buf;
     if (h.move === 'cheer' && !any) return;
@@ -283,7 +335,10 @@ export function createSim() {
       if ((a === 'punch' || a === 'kick') && h.stance === 'guard') {
         s.buf = null;
         if (near) h.face = sign(near.x - h.x);
-        return set(h, attackOf(a, inp.up ? 'high' : inp.down ? 'low' : 'mid'));
+        const move = heroAttack(a, inp, dirIn);
+        set(h, move);
+        h.str = /^(punch|kick)/.test(move) ? (a === 'kick' ? 'K' : 'P') : '';
+        return;
       }
       s.buf = null; // a press that means nothing in this stance
     }
@@ -294,6 +349,10 @@ export function createSim() {
     // what "away" guards against: a foe's blow on its way (windup or strike), or a dart
     const threat = near ? isAttack(near.move) && near.moveT < MOVES[near.move].off : !!side;
     if (h.stance === 'guard') {
+      // the dodges: away twice, a backflip out of reach; up twice, a sway back from the blow
+      const back = near ? (sign(near.x - h.x) > 0 ? 'left' : 'right') : h.face > 0 ? 'left' : 'right';
+      if (tapped[back]) { if (near) h.face = sign(near.x - h.x); return set(h, 'backflip'); }
+      if (tapped.up) return set(h, 'sway');
       if (inp.down && away) { h.face = side; return hold(h, 'blockLow'); }
       if (inp.down) return hold(h, 'duck');
       if (away && threat) { h.face = side; return hold(h, 'block'); }
@@ -314,6 +373,17 @@ export function createSim() {
     if (h.move !== 'idle' && h.move !== 'cheer') set(h, 'idle');
   }
   const hold = (f, move) => { if (f.move !== move) set(f, move); };
+  /** what a press of punch or kick throws: its height from up / down, a special with a direction
+   *  (toward: an uppercut, a flying side kick, or down too a sweep; away: a spinning back kick) */
+  function heroAttack(btn, inp, dirIn) {
+    const h = sim.s.hero, toward = dirIn === h.face, away = dirIn === -h.face;
+    if (btn === 'kick') {
+      if (toward && inp.down) return 'sweep';
+      if (toward) return 'sideKick';
+      if (away) return 'backKick';
+    } else if (toward && !inp.down) return 'uppercut';
+    return attackOf(btn, inp.up ? 'high' : inp.down ? 'low' : 'mid');
+  }
   function heroBow() {
     const s = sim.s, h = s.hero;
     set(h, 'bow');
@@ -367,6 +437,8 @@ export function createSim() {
     f.face = sign(d);
     f.cd -= DT; f.think -= DT;
     if (K.palm && f.palmT > 0) f.palmT -= DT;
+    // Wren down on the floor: wait for her to get up
+    if (FLOORED.has(h.move)) { if (HELD.has(f.move) || f.move === 'walk') set(f, 'idle'); return; }
     // read Wren's attack as it starts, even while reeling: decide once, act after the reaction time
     if (isAttack(h.move) && h.atk !== f.seen && dist < MOVES[h.move].reach + 0.6) {
       f.seen = h.atk;
@@ -376,6 +448,11 @@ export function createSim() {
       let c = s.t < f.wary ? Math.min(0.95, K.guard + 0.45) : K.guard;
       if (HELD.has(f.move) && !holding) c *= 0.4; // caught in the wrong guard
       f.defend = holding ? f.move : rand(s) < c ? (rand(s) < K.right ? defence(hh, s) : wrong(hh, s)) : null;
+      // or out of the way altogether: back from a blow above the legs, or away over the floor
+      if (f.defend && !holding && K.evade && rand(s) < K.evade) {
+        if (K.flips && (hh === 'low' || rand(s) < 0.5)) f.defend = f.kind === 'adept' && rand(s) < 0.4 ? 'cartwheel' : 'backflip';
+        else if (hh !== 'low') f.defend = 'sway';
+      }
       f.reactAt = s.t + K.react + rand(s) * 0.08;
     }
     if (!FREE.has(f.move)) return;
@@ -396,6 +473,7 @@ export function createSim() {
       }
     }
     if (f.defend && isAttack(h.move) && h.atk === f.seen && h.moveT < MOVES[h.move].off && s.t >= f.reactAt) {
+      if (!HELD.has(f.defend)) { const e = f.defend; f.defend = null; return set(f, e); } // a dodge
       hold(f, f.defend);
       f.holdTo = s.t + Math.max(0.12, (MOVES[h.move].off - h.moveT) / h.tempo + 0.06);
       return;
@@ -446,13 +524,13 @@ export function createSim() {
   // the attack a foe tries next: one that reaches Wren from where she stands
   function chooseAttack(f, K, dist) {
     const s = sim.s, h = s.hero, far = dist > MOVES.punchMid.reach;
-    if (K.seq) { const a = K.seq[f.seqI % K.seq.length]; return far && !a.startsWith('kick') ? 'kickMid' : a; }
+    if (K.seq) { const a = K.seq[f.seqI % K.seq.length]; return far && MOVES[a].reach <= 1.3 ? 'kickMid' : a; }
     // aim round the guard Wren is holding
     if (HELD.has(h.move) && !f.combo && rand(s) < K.adapt) {
       const hh = h.move === 'block' ? 'low' : h.move === 'blockLow' ? (rand(s) < 0.5 ? 'high' : 'mid') : 'mid';
       return attackOf(far || rand(s) < 0.5 ? 'kick' : 'punch', hh);
     }
-    let pref = Object.entries(K.pref).filter(([k]) => !far || k.startsWith('kick'));
+    let pref = Object.entries(K.pref).filter(([k]) => !far || MOVES[k].reach > 1.3);
     if (f.combo) pref = pref.filter(([k]) => MOVES[k].height !== f.lastH);
     return pick(s, Object.fromEntries(pref.length ? pref : Object.entries(K.pref)));
   }
@@ -532,6 +610,7 @@ export function createSim() {
       d.x += d.vx * DT;
       if (d.gone || h.ai === 'down' || !(was > h.x && d.x <= h.x)) continue;
       if (d.h === 'high' && h.move === 'duck') continue;
+      if (FLOORED.has(h.move) || evading(h, d.h)) continue; // over her on the floor, or dodged
       d.gone = true;
       if (h.move === 'block') { emit('dartBlock', { x: d.x }); h.vx = -0.4; continue; }
       const ko = open(h);

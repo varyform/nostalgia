@@ -10,7 +10,7 @@
 //   view.events(sim.events, sim); view.draw(app); view.menuAt(x, y) → index | null
 import { fitWide } from '@nostalgia/game/runtime';
 import { blendFor, KNEEL, lerpPose, poseFor as handPose } from './poses.js';
-import { rigPoseFor } from './rig-poses.js';
+import { blendRig, rigPose, skeletonOf } from './rig-poses.js';
 import { anchors, drawFigure, palette, ribbon, SIZE, solve, TRAIL } from './rig.js';
 import { buildLayers, clamp, drawFloor, drawLamp, drawMist, drawShine, drawWeather, hash, lampsIn, makeWeather, mix, TAU, THEMES } from './scenery.js';
 import { banner, drawHud, drawTouch, label, nameCard, INK, DIM, EMBER, HEAD, RED, pad6 } from './hud.js';
@@ -23,7 +23,11 @@ const ease = q => q * q * (3 - 2 * q);
 
 // ?rig=off draws the hand-made poses, to compare.
 const RIG = typeof location === 'undefined' || new URLSearchParams(location.search).get('rig') !== 'off';
-const poseFor = (f, kind, ctx) => (RIG && rigPoseFor(f, kind, ctx)) || handPose(f, kind, ctx);
+// A fighter's pose: the rig editor's (drawn from its 3D joints), else poses.js's flat one.
+const poseFor = (f, kind, ctx) => {
+  const rig = RIG && rigPose(f, kind, ctx);
+  return rig ? { rig } : { flat: handPose(f, kind, ctx) };
+};
 
 export function createRenderer(cv, app0) {
   const g = cv.getContext('2d');
@@ -117,10 +121,12 @@ export function createRenderer(cv, app0) {
           ink(e.x, y, 6 + (e.dmg | 0) * 3, dir);
           ring(e.x, y);
           shake = Math.max(shake, 0.14 + 0.06 * (e.dmg | 0)); flash = Math.max(flash, 0.12); flashCol = '255,236,210';
+          if (e.fx) { spark(e.x, y, 22, ['#ffffff', '#ffd27a', '#ff6a1a'], 6.5, dir); ring(e.x, y, '255,200,140'); shake = Math.max(shake, 0.32); flash = 0.22; }
           if (f) mem(f.id).hitH = e.h ?? 'high';
           break;
         }
         case 'block': spark(e.x, y, 8, ['#ffffff', '#d8e6ff'], 3, f ? -f.face : 1); ring(e.x, y, '210,230,255'); shake = Math.max(shake, 0.05); break;
+        case 'fall': { const x = e.x - (f?.face ?? 1) * 0.85; later.push({ t: 0.35, fn: () => { dust(x, 8, 1, 0.05, 1); shake = Math.max(shake, 0.1); } }); break; }
         case 'ko': { shake = Math.max(shake, 0.2); const x = e.x - (f?.face ?? 1) * 0.85; later.push({ t: 0.75, fn: () => { dust(x, 10, 1.2, 0.05, 1.2); shake = Math.max(shake, 0.12); } }); break; }
         case 'gateShake': dust(e.x, 4, 1.2, GATE_H - 0.1, 0.6); shake = Math.max(shake, 0.06); break;
         case 'gateSlam': dust(e.x - 0.5, 10, 0.6, 0.05, 1.3); dust(e.x + 0.5, 10, 0.6, 0.05, 1.3); shake = Math.max(shake, 0.5); break;
@@ -297,13 +303,18 @@ export function createRenderer(cv, app0) {
     const mv = forced ? 'forced' : f.move, T = f.moveT ?? 0;
     if (mv !== m.move || T < m.moveT - 1e-4) { m.from = m.last; m.move = mv; m.bd = blendFor(mv, f); }
     m.moveT = T;
-    const pose = m.from && T < m.bd ? lerpPose(m.from, target, ease(clamp(T / m.bd, 0, 1))) : target;
-    m.last = { ...pose };
+    // the cross-fade, between two poses of the same sort
+    const q = ease(clamp(T / m.bd, 0, 1)), from = m.from && T < m.bd ? m.from : null;
+    const pose = target.rig
+      ? { rig: from?.rig ? blendRig(from.rig, target.rig, q) : target.rig }
+      : { flat: from?.flat ? lerpPose(from.flat, target.flat, q) : { ...target.flat } };
+    m.last = pose;
     // the coat swings behind as it moves
     const vx = m.px != null && dt > 0 ? clamp((f.x - m.px) / dt, -6, 6) : 0;
     m.px = f.x; m.ph = f.phase ?? 0;
     if (dt > 0) { const goal = clamp(vx * f.face * 0.07, -0.18, 0.22) + Math.sin(t * 1.3 + f.x) * 0.02; m.coatV += ((goal - m.coat) * 70 - m.coatV * 9) * dt; m.coat += m.coatV * dt; }
-    const J = solve(pose), sz = SIZE[kind] ?? 1, face = f.face || 1;
+    const J = pose.rig ? skeletonOf(pose.rig, m.J) : solve(pose.flat), sz = SIZE[kind] ?? 1, face = f.face || 1;
+    m.J = J;
     // trailing cloth hangs behind the figure
     const an = anchors(J, kind), trail = TRAIL[kind], pal = palOf(kind, f.flash > 0 ? Math.min(1, f.flash * 5) : 0);
     if (trail && an.sash) {
@@ -342,9 +353,9 @@ export function createRenderer(cv, app0) {
       if (Math.abs(f.x - s.cam) > half + 1.5) continue;
       const kind = f.teacher ? 'teacher' : kindOf(f), m = mem(f.id);
       let forced = null;
-      if (f.teacher && !f.freed) { const b = Math.sin(t * 1.4) * 0.01; forced = { ...KNEEL, hy: KNEEL.hy + b, t: KNEEL.t + b * 80 }; }
-      // shadow from the pose last drawn (a frame behind, which can't be seen)
-      if (m.last) shadow(f.x, solve(m.last), SIZE[kind] ?? 1, f.face || 1, f.down);
+      if (f.teacher && !f.freed) { const b = Math.sin(t * 1.4) * 0.01; forced = { flat: { ...KNEEL, hy: KNEEL.hy + b, t: KNEEL.t + b * 80 } }; }
+      // shadow from the skeleton last drawn (a frame behind, which can't be seen)
+      if (m.J) shadow(f.x, m.J, SIZE[kind] ?? 1, f.face || 1, f.down);
       figure(f, kind, t, dt, { pose: forced });
     }
   }

@@ -53,15 +53,19 @@ function howTo(ui, app, x0, y0, w) {
     ['{stance}', 'Run ⇄ guard. Quick, but one blow fells you'],
     ['{walk}', 'Step. Hold back to block, with down: low'],
     ['{punch} {kick}', 'Strike mid · with up high · with down low'],
+    ['{punch} {kick}', 'Three blows in a row end in a finisher'],
+    ['{kick}', 'Toward: flying kick · away: spinning kick · and down: sweep'],
+    ['{punch}', 'Toward: uppercut, which knocks a foe down'],
     ['{down}', 'Duck under high blows and darts'],
+    ['{walk}', 'Back twice: backflip away · up twice: sway'],
     ['{bow}', 'Bow, standing in run stance'],
   ];
   rows.forEach(([keys, text], k) => {
-    const y = y0 + 140 * u + k * 70 * u;
+    const y = y0 + 128 * u + k * 44 * u;
     prompt(ui, app.input, keys, x0 + 150 * u, y, 22, INK, 'right');
     label(ui, text, x0 + 176 * u, y + 8 * u, 20, DIM, { wgt: 700 });
   });
-  label(ui, 'Rest in run stance, far from any foe: your flames rekindle', x0 + w / 2, y0 + 520 * u, 19, EMBER, { align: 'center', wgt: 700 });
+  label(ui, 'Rest in run stance, far from any foe: your flames rekindle', x0 + w / 2, y0 + 556 * u, 19, EMBER, { align: 'center', wgt: 700 });
 }
 function scores(ui, app, x0, y0, w, t) {
   const u = ui.u;

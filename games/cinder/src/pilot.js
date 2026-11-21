@@ -20,7 +20,7 @@ export function createPilot(sim, { skill = 0.75, seed = 7 } = {}) {
   const right = () => rand() < 0.5 + 0.5 * skill;
   let last = { ...EMPTY_INPUT }, t0 = -1, sceneOf = -1;
   let m; // memory for this attempt at this scene
-  const fresh = () => ({ seen: -1, plan: null, at: 0, bowed: new Set(), noBow: new Set(), opened: {}, prevY: {}, gamble: {}, dartSeen: -1, dartPlan: null, dartAt: 0, aggr: 0, mood: 0, guardUp: false });
+  const fresh = () => ({ queue: [], seen: -1, plan: null, at: 0, bowed: new Set(), noBow: new Set(), opened: {}, prevY: {}, gamble: {}, dartSeen: -1, dartPlan: null, dartAt: 0, aggr: 0, mood: 0, guardUp: false });
   m = fresh();
 
   return () => {
@@ -30,7 +30,9 @@ export function createPilot(sim, { skill = 0.75, seed = 7 } = {}) {
     t0 = s.t;
     const out = { ...EMPTY_INPUT };
     const tap = a => { out[a] = !last[a]; };
-    if (s.status === 'play') drive(s, out, tap);
+    // a planned run of inputs (a double tap) plays out a frame at a time
+    if (m.queue.length) Object.assign(out, m.queue.shift());
+    else if (s.status === 'play') drive(s, out, tap);
     last = out;
     return out;
   };
@@ -82,13 +84,29 @@ export function createPilot(sim, { skill = 0.75, seed = 7 } = {}) {
         const left = (fm.on - f.moveT) / f.tempo; // seconds of windup still to come when it's read
         const quick = MOVES.punchMid.on / h.tempo + 0.05;
         if (f.move !== 'palm' && dist <= MOVES.punchMid.reach - 0.05 && left - (m.at - s.t) > quick && rand() < 0.15 + 0.4 * skill) m.plan = 'beat';
+        // now and then out of the way altogether: a backflip, or a sway back from a high one
+        else if (rand() < 0.12 + 0.12 * skill && left - (m.at - s.t) > 0.12) m.plan = fm.height === 'low' || f.move === 'palm' || rand() < 0.5 ? 'flip' : 'sway';
         else m.plan = right() ? guardFor(fm.height) : wrongFor(fm.height);
       }
       if (f.moveT < fm.off && dist <= fm.reach + 0.3) {
         if (s.t < m.at) { if (guardUp && free) hold('block', out, away); return; } // not read yet
         if (m.plan === 'beat') { if (free) tap('punch'); return; }
+        if (m.plan === 'flip' || m.plan === 'sway') {
+          // timed to the blow: the dodge starts a moment before it lands
+          if ((fm.on - f.moveT) / f.tempo > (m.plan === 'flip' ? 0.3 : 0.22)) return;
+          const k = m.plan === 'flip' ? away : 'up';
+          if (free) m.queue.push({ [k]: true }, {}, { [k]: true }, {});
+          m.plan = null;
+          return;
+        }
+        if (!m.plan) return;
         return hold(m.plan, out, away);
       }
+    }
+    // a string: strike again as the last blow spends itself while the foe is reeling or open
+    if (isAttack(h.move) && h.str && h.moveT >= MOVES[h.move].off && (f.move === 'hit' || f.cd > 0.3) && dist <= MOVES.kickMid.reach && rand() < 0.1 + 0.2 * skill) {
+      const k = h.str.endsWith('K') ? 'kick' : rand() < 0.6 ? 'punch' : 'kick';
+      return tap(k);
     }
     if (!free) return;
     // Wren's own swing: after reading how the foe stands
@@ -103,6 +121,14 @@ export function createPilot(sim, { skill = 0.75, seed = 7 } = {}) {
       if (rand() > skill * 0.9 + 0.1) hgt = ['high', 'mid', 'low'][Math.floor(rand() * 3)];
       const kind = !inPunch || (opening && f.move === 'hit' && rand() < 0.3) ? 'kick' : rand() < 0.7 ? 'punch' : 'kick';
       m.aggr = 0;
+      // a special now and then: a sweep under a high guard or a duck, a flying side kick from
+      // out of punching range, a spinning back kick or an uppercut into an opening
+      if (rand() < 0.3) {
+        if ((f.move === 'block' || f.move === 'duck') && dist <= MOVES.sweep.reach - 0.05) { out.down = true; out[toward] = true; return tap('kick'); }
+        if (!inPunch && dist <= MOVES.sideKick.reach - 0.05) { out[toward] = true; return tap('kick'); }
+        if (opening && dist <= MOVES.backKick.reach - 0.05 && rand() < 0.5) { out[away] = true; return tap('kick'); }
+        if (opening && dist <= MOVES.uppercut.reach - 0.05) { out[toward] = true; return tap('punch'); }
+      }
       if (hgt === 'high') out.up = true;
       if (hgt === 'low') out.down = true;
       return tap(kind);

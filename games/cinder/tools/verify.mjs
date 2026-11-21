@@ -20,7 +20,7 @@ const args = process.argv.slice(2);
 const opt = (name, d) => { const i = args.indexOf(name); return i >= 0 ? +args[i + 1] : d; };
 const seeds = opt('--seeds', 20), soak = opt('--soak', 0);
 const only = args.filter((a, i) => !a.startsWith('--') && !['--seeds', '--soak'].includes(args[i - 1])).map(n => +n - 1);
-const EVENTS = new Set(['intro', 'stance', 'step', 'swing', 'hit', 'block', 'ko', 'bow', 'foe', 'regen', 'gateShake', 'gateSlam', 'crush', 'draw', 'dart', 'dartHit', 'dartBlock', 'clear', 'die', 'life', 'win', 'over']);
+const EVENTS = new Set(['intro', 'stance', 'step', 'swing', 'hit', 'block', 'ko', 'fall', 'bow', 'foe', 'regen', 'gateShake', 'gateSlam', 'crush', 'draw', 'dart', 'dartHit', 'dartBlock', 'clear', 'die', 'life', 'win', 'over']);
 const THEMES = ['dusk', 'gate', 'court', 'hall', 'stair', 'throne', 'garden'];
 const TIER = { footman: 1, brawler: 2, adept: 3, regent: 4 };
 let bad = 0;

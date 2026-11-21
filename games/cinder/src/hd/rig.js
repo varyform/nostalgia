@@ -56,7 +56,7 @@ export function anchors(J, kind) {
 }
 
 // ---------- drawing primitives ----------
-let g = null, LV = [0, 1], OP = 0;
+let g = null, LV = [0, 1], OP = 0, HAND = 1;
 function cap(a, b, r1, r2) {
   const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1e-5, nx = -dy / L, ny = dx / L, ux = dx / L, uy = dy / L;
   g.beginPath();
@@ -84,7 +84,8 @@ function poly(pts, fill) {
 }
 function dot(p, r, fill) { g.beginPath(); g.arc(p[0], p[1], r, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); }
 function foot(L, c, far, len = 0.19) {
-  const a = L.a, f = L.f, n = [-f[1], f[0]];
+  // foreshortened as it turns toward or away from the view (fl), its sole down however it's mirrored
+  const k = L.fl ?? 1, a = L.a, f = [L.f[0] * k, L.f[1] * k], n = [-L.f[1] * HAND, L.f[0] * HAND];
   const pts = [add(a, n, 0.035), add(add(a, f, -0.06), n, -0.02), add(add(a, f, -0.055), n, -0.075), add(add(a, f, len), n, -0.075), add(add(a, f, len - 0.02), n, -0.035), add(add(a, f, 0.06), n, 0.0)];
   poly(pts, far ? c.d : c.b);
 }
@@ -98,15 +99,18 @@ function hand(A, r, c, far, open = OP) {
 // ---------- the figures ----------
 // pal: { role: { b, h, d } } (base, lit, far side), from palette() in render.js
 export function drawFigure(ctx, J, kind, pal, { light = [0.6, 0.8], coat = 0, t = 0 } = {}) {
-  g = ctx; LV = light; OP = J.op ?? 0;
-  const w = WIDTH[kind] ?? 1;
+  g = ctx; LV = light; OP = J.op ?? 0; HAND = J.hand ?? 1;
+  const w = (WIDTH[kind] ?? 1) * (J.wide ?? 1);
   const dress = DRESS[kind] ?? DRESS.footman;
   dress.back?.(J, pal, w, coat, t);
-  dress.arm(J.la, pal, w, true);
+  // la and ll are the far arm and leg (the rig's skeletons swap them as the body turns); a far
+  // arm reaching out toward the view (face-on) still goes over the body
+  if (!J.laFront) dress.arm(J.la, pal, w, true);
   dress.leg(J.ll, pal, w, true);
   dress.leg(J.rl, pal, w, false);
   dress.body(J, pal, w, coat, t);
   dress.head(J, pal, w, t);
+  if (J.laFront) dress.arm(J.la, pal, w, true);
   dress.arm(J.ra, pal, w, false);
   dress.front?.(J, pal, w, coat, t);
 }
@@ -123,7 +127,7 @@ function torso(J, c, w, { hipB = 0.1, hipF = 0.09, chest = 0.13, shB = 0.085, sh
   g.quadraticCurveTo(p5[0], p5[1], p0[0], p0[1]);
   g.closePath(); g.fillStyle = c.b; g.fill();
   // the lit side of the chest or back
-  const side = LV[0] >= 0 ? 1 : -1;
+  const side = LV[0] * J.fr[0] + LV[1] * J.fr[1] >= 0 ? 1 : -1;
   g.beginPath();
   const a = tp(J, side * hipF * w * 0.7, 0.05), b = tp(J, side * chest * w * 0.85, L * 0.66), d = tp(J, side * shF * w * 0.8, L * 0.95), e = tp(J, side * 0.02, L * 0.9), f = tp(J, side * 0.02, 0.06);
   g.moveTo(a[0], a[1]); g.quadraticCurveTo(b[0], b[1], d[0], d[1]); g.lineTo(e[0], e[1]); g.lineTo(f[0], f[1]); g.closePath();

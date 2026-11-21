@@ -204,11 +204,17 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
       app.fade = Math.min(1, app.fade + DT * 1.5);
       if (app.fade >= 1) demoLoad();
     } else app.fade = Math.max(0, app.fade - DT * 2);
+    if (hitStop()) return;
     sim.step(pilot());
     demoT += DT;
     const s = sim.s;
     if (!ending && ((s.status === 'over' && s.statusT > 2.5) || (s.status === 'won' && s.statusT > 8) || demoT > DEMO_RUN)) ending = 1;
   }
+
+  // a special landing holds the fight still for a beat (the effects play on), so it lands hard
+  const HIT_STOP = 0.08;
+  let stopT = 0;
+  const hitStop = () => (stopT > 0 ? ((stopT -= DT), true) : false);
 
   // ---------- one fixed step ----------
   function update() {
@@ -243,6 +249,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
       }
       case 'play':
         if (hit('pause') || app.touch?.taps.has('pause')) { setState('pause'); audio.sfx('pause'); break; }
+        if (hitStop()) break;
         sim.step(controls());
         // a scene begins (the sim loads the next one by itself after a clear): its checkpoint
         if (ev('intro')) checkpoint();
@@ -310,6 +317,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   // ---------- loop ----------
   function tick() {
     update();
+    if (sim.events.some(e => e.k === 'hit' && e.fx)) stopT = HIT_STOP;
     view.events(sim.events, sim);
     sound();
     sim.events.length = 0;

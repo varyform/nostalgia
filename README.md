@@ -211,7 +211,10 @@ const J = jointsAt(punch, frame, project.proportions); // frames blend; x forwar
 const hand = J[Joint.handNear * JOINT_STRIDE + 1]; // the near hand's height
 ```
 
-Cinder plays its fighters this way (`games/cinder/src/hd/rig-poses.js`, its moves made by `tools/rig-moves.mjs`).
+Cinder plays its fighters this way (`games/cinder/src/hd/rig-poses.js`), drawing each from the rig's 3D joints. Its moves
+live in `games/cinder/cinder.rig.json`, a project to open in the editor: `tools/rig-moves.mjs` makes the base moves,
+`tools/rig-specials.mjs` the specials (from Mixamo clips and keyed by hand), and `tools/rig-pack.mjs` packs the game's
+copy after an edit.
 
 ## Adding a game
 
