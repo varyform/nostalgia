@@ -1,4 +1,5 @@
 'use strict';
+import { createHdr } from '@nostalgia/game/hdr';
 import { fitPixels, fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput, drawPrompt, glyphs, measureGlyphs, drawGlyphs, measureGlyph, parsePrompt } from '@nostalgia/input';
 import { createAutosave } from '@nostalgia/save';
@@ -15,6 +16,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   // everything bound outside the game's own state, undone by stop()
   const { listen, offAll } = listeners();
   const unfit = fitPixels(cv, { width: 320, height: 240 }); // 320x200 shown at 4:3
+  const hdr = createHdr([cv], { enabled: !demo });
 
   // CGA palettes: 1 high, 0 high, 1 low
   const PALS = [
@@ -153,6 +155,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   if (!demo) {
     // fullscreen must be requested from the input event itself, not from the game loop
     input.on('fullscreen', fullscreen);
+    input.on('hdr', () => hdr.cycle());
     listen(window, 'keydown', () => audio.unlock());
     listen(cv, 'dblclick', fullscreen);
     onAway(listen, () => { if (state === 'play' && !paused) { paused = true; audio.engine(false); } });
@@ -1005,10 +1008,11 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     ctext('DELIVER THEM TO OUTPOSTS AND HQ', 84, 3);
     ctext('BOMB PRISON HUTS TO FREE AGENTS', 94, 3);
     ctext('SHOOT FUEL DEPOTS TO REFUEL', 104, 3);
-    // keyboard-only extras (sound, palette, fullscreen) stay off the pad legend
+    // keyboard-only extras (sound, palette, fullscreen, hdr) stay off the pad legend; with hdr, EXIT
+    // takes a third column on the last row rather than a fifth row the menu would overlap
     const rows = [[['fly', 'FLY'], ['fire', 'FIRE']], [['bomb', 'BOMB'], ['pause', 'PAUSE']]];
-    if (!onPad()) rows.push([['sound', 'SOUND'], ['palette', 'PALETTE']], [['fullscreen', 'FULLSCREEN']]);
-    if (onExit) (rows[rows.length - 1].length < 2 ? rows[rows.length - 1] : rows[rows.push([]) - 1]).push(['quit', 'EXIT']);
+    if (!onPad()) rows.push([['sound', 'SOUND'], ['palette', 'PALETTE']], [['fullscreen', 'FULLSCREEN'], ...(hdr.supported ? [['hdr', hdr.label]] : [])]);
+    if (onExit) (rows[rows.length - 1].length < (onPad() ? 2 : 3) ? rows[rows.length - 1] : rows[rows.push([]) - 1]).push(['quit', 'EXIT']);
     legend(rows, 121 - (resume ? 4 : 0) + Math.round((4 - rows.length) * 6.5), 13, 3);
     if (resume) {
       // CONTINUE / NEW GAME: up and down pick, start confirms
@@ -1070,7 +1074,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   }
 
   // ---------- main loop ----------
-  const ticker = fixedLoop({ dt: DT, step: () => update(DT), draw: render });
+  const ticker = fixedLoop({ dt: DT, step: () => update(DT), draw: () => { render(); hdr.present(); } });
   if (demo) {
     mi = mission % MISSIONS.length; startMission();
     // airborne by the first frame; a still demo shows the mission a few seconds in
@@ -1086,6 +1090,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     ticker.stop();
     offAll(); unfit();
     input.destroy();
+    hdr.destroy();
     audio.destroy();
   }
   return { stop };

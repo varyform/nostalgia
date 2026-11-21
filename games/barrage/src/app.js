@@ -3,6 +3,7 @@
 // the attract run behind the title and the demo, sound, pointer, the saved setup and records,
 // and the autosave behind the title's CONTINUE.
 // It never draws: the renderer reads this `app` object every frame and answers hit tests.
+import { createHdr } from '@nostalgia/game/hdr';
 import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave } from '@nostalgia/save';
@@ -60,6 +61,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     owned: t => WEAPONS.filter(w => sim.has(t, w.id)),
   };
   const view = renderer(cv, app);
+  const hdr = createHdr([cv], { enabled: !demo });
+  app.hdr = hdr;
   function setState(s) {
     // back on the title: CONTINUE comes and goes with the checkpoint, and a new one is picked first
     if (s === 'title' && app.state !== 'title') {
@@ -233,6 +236,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'pointerdown', unlock);
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', () => { if (!editingName()) toggleFullscreen(); });
+    input.on('hdr', () => { if (!editingName()) hdr.cycle(); });
     onAway(listen, () => { if (app.state === 'play') { app.pauseMenu = 0; setState('pause'); } });
     // typed names on the setup screen
     listen(window, 'keydown', e => {
@@ -557,7 +561,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     sound();
     sim.events.length = 0;
   }
-  const loop = fixedLoop({ dt: DT, step: tick, draw: () => view.draw(app) });
+  const loop = fixedLoop({ dt: DT, step: tick, draw: () => { view.draw(app); hdr.present(); } });
   if (demo) {
     beginMatch(attractSetup());
     autoShop();
@@ -579,6 +583,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     offAll();
     input.destroy();
     view.destroy();
+    hdr.destroy();
     audio?.destroy();
   }
   return { stop };

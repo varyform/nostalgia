@@ -33,7 +33,8 @@
       "quit": { "keys": ["KeyQ"], "pad": ["Select"] },
       "back": { "keys": ["Escape"], "pad": ["East"] },
       "sound": { "keys": ["KeyM"] },
-      "fullscreen": { "keys": ["KeyF"] }
+      "fullscreen": { "keys": ["KeyF"] },
+      "hdr": { "keys": ["KeyL"] }
     },
     "display": {
       "move": { "keys": ["Arrows"], "pad": ["LStick"] },

@@ -2,6 +2,7 @@
 // pause, screen clear, Order Up! bonus, game over, initials), the attract-mode demo, sound,
 // touch, the saved high-score table and the autosave behind the title's CONTINUE. It never draws: a renderer (cga/ or hd/) reads this
 // `app` object every frame and answers touch hit tests.
+import { createHdr } from '@nostalgia/game/hdr';
 import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave } from '@nostalgia/save';
@@ -49,6 +50,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     titleItems: () => [...(app.saved ? ['continue'] : []), 'play', 'scores', ...(onExit ? ['exit'] : [])],
   };
   const view = renderer(cv, app);
+  const hdr = createHdr([cv], { enabled: !demo });
+  app.hdr = hdr;
   function setState(s) {
     // back on the title: CONTINUE comes and goes with the checkpoint, and a new one is picked first
     if (s === 'title' && app.state !== 'title') {
@@ -66,6 +69,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'pointerdown', unlock);
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', () => { if (app.state !== 'initials') toggleFullscreen(); }); // from the key event itself, as browsers require
+    input.on('hdr', () => { if (app.state !== 'initials') hdr.cycle(); });
     listen(cv, 'dblclick', toggleFullscreen);
     onAway(listen, () => { if (app.state === 'play' || app.state === 'bonus') setState('pause'); });
     // typed initials
@@ -269,7 +273,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     sound();
     sim.events.length = 0;
   }
-  const loop = fixedLoop({ dt: DT, step: tick, draw: () => view.draw(app) });
+  const loop = fixedLoop({ dt: DT, step: tick, draw: () => { view.draw(app); hdr.present(); } });
   if (demo) {
     startSegment();
     // a still demo shows the segment a few seconds in
@@ -288,6 +292,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     offAll();
     input.destroy();
     view.destroy();
+    hdr.destroy();
     audio?.destroy();
   }
   app.rows = ROWS;

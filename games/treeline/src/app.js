@@ -38,6 +38,7 @@
 //
 // The renderer's hit(x, y, app) answers taps outside the flight: { act: 'menu', i } (an entry of
 // the current menu), { act: 'back' }, { act: 'locked' } (a locked mission), or { act: 'tap' }.
+import { createHdr } from '@nostalgia/game/hdr';
 import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave, savedAgo } from '@nostalgia/save';
@@ -106,6 +107,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     rank: () => rankOf(camp.score),
   };
   const view = createRenderer(cv, app);
+  const hdr = createHdr([document.getElementById('gl'), cv], { enabled: !demo });
+  app.hdr = hdr;
   function setState(s) { app.state = s; app.stT = 0; app.menu = 0; }
 
   // ---------- page plumbing (not in the demo) ----------
@@ -115,6 +118,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'pointerdown', unlock);
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', () => toggleFullscreen());
+    input.on('hdr', () => hdr.cycle());
     listen(cv, 'dblclick', () => toggleFullscreen());
     onAway(listen, () => { if (app.state === 'play') setState('pause'); });
     app.touch = createTouch(cv, { listen, view });
@@ -365,7 +369,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     sound();
     sim.events.length = 0;
   }
-  const loop = fixedLoop({ dt: DT, step: tick, draw: () => view.draw(app) });
+  const loop = fixedLoop({ dt: DT, step: tick, draw: () => { if (view.draw(app) !== false) hdr.present(); } }); // a skipped frame leaves the WebGL buffer stale: keep the last HDR one
   if (demo) {
     startDemo();
     // a still demo shows a mission well under way
@@ -384,6 +388,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     offAll();
     input.destroy();
     view.destroy();
+    hdr.destroy();
     audio?.destroy();
   }
   return { stop, app };

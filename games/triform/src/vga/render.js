@@ -436,6 +436,7 @@ export function createVgaRenderer(cv) {
     if (kb) last.push(['sound', 'SOUND']);
     rows.push(last);
     if (kb) rows.push([['forms', 'FORM', true], ['fullscreen', 'FULLSCREEN']]);
+    if (kb && app.hdr?.supported) rows.push([['hdr', app.hdr.label]]);
     if (app.onExit) (rows[rows.length - 1].length < 2 ? rows[rows.length - 1] : rows[rows.push([]) - 1]).push(['quit', 'EXIT']);
     const items = app.items();
     legend(input, rows, 118, items.length > 1 ? 10 : 11);

@@ -34,7 +34,8 @@
       "back": { "keys": ["Escape"], "pad": ["East"] },
       "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
       "sound": { "keys": ["KeyM"] },
-      "fullscreen": { "keys": ["KeyF"] }
+      "fullscreen": { "keys": ["KeyF"] },
+      "hdr": { "keys": ["KeyL"] }
     },
     "display": {
       "aim": { "keys": ["ArrowsH"], "pad": ["DpadH"], "touch": "Drag" },

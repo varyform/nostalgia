@@ -408,6 +408,7 @@ export function createHdRenderer(cv) {
     const input = app.input, kb = input.device.kind === 'keyboard';
     const extra = [['pause', 'PAUSE']];
     if (kb) extra.push(['sound', app.soundOn ? 'SOUND ON' : 'SOUND OFF'], ['fullscreen', 'FULL SCREEN']);
+    if (kb && app.hdr?.supported) extra.push(['hdr', app.hdr.label]);
     if (app.onExit) extra.push(['quit', 'EXIT']);
     const ly = 650 + (items.length - 2) * 30;
     if (app.touch?.active) label('TAP A COUNTER TO GO THERE · HOLD POUR TO FILL, LET GO TO SLIDE', 960, ly + 30, 26, '#ffffff', 700, 'center', 2);

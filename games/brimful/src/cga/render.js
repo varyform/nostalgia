@@ -410,6 +410,7 @@ export function createCgaRenderer(cv) {
     const input = app.input, kb = input.device.kind === 'keyboard';
     const extra = [['pause', 'PAUSE']];
     if (kb) extra.push(['sound', app.soundOn ? 'SOUND ON' : 'SOUND OFF']);
+    if (kb && app.hdr?.supported) extra.push(['hdr', app.hdr.label]);
     if (app.onExit) extra.push(['quit', 'EXIT']);
     const ly = items.length > 3 ? 130 : 128 + (items.length - 2) * 8;
     [[['switch', 'COUNTER'], ['walk', 'WALK']], [['pour', 'HOLD TO FILL, LET GO TO SLIDE']], extra].forEach((r, i) => legend(input, [r], ly + i * 12, 12, i === 1 ? 3 : 1));

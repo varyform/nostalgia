@@ -93,7 +93,7 @@ function title(ctx, app, t, dt) {
   const px = cw * 0.56, pw = cw * 0.39, py = 120 * u, ph = 600 * u;
   panel(ui, px, py, pw, ph);
   if ((app.page ?? 0) === 0) howTo(ui, app, px, py, pw); else scores(ui, app, px, py, pw, t);
-  legend(ui, app.input, [[['sound', app.soundOn ? 'Sound on' : 'Sound off'], ['fullscreen', 'Full screen'], ...(app.onExit ? [['quit', 'Exit']] : [])]], px + pw / 2, 780 * u, 20);
+  legend(ui, app.input, [[['sound', app.soundOn ? 'Sound on' : 'Sound off'], ['fullscreen', 'Full screen'], ...(app.hdr?.supported ? [['hdr', `HDR ${app.hdr.label.slice(4).toLowerCase()}`]] : []), ...(app.onExit ? [['quit', 'Exit']] : [])]], px + pw / 2, 780 * u, 20);
   prompt(ui, app.input, '{start} Begin', px + pw / 2, 860 * u, 26, Math.floor(t * 2) % 2 ? GOLD : INK);
 }
 function entry(ctx, app, t, dt) {

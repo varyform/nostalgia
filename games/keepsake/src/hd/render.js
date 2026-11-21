@@ -467,7 +467,7 @@ export function createRenderer(cv, app0) {
     else {
       legend(input, [['move', 'WALK'], ['climb', 'STAIRS'], ['punch', 'PUNCH']], 1210, ly);
       const extra = [['pause', 'PAUSE']];
-      if (kb) extra.push(['sound', app.soundOn ? 'SOUND ON' : 'SOUND OFF'], ['fullscreen', 'FULL SCREEN']);
+      if (kb) extra.push(['sound', app.soundOn ? 'SOUND ON' : 'SOUND OFF'], ['fullscreen', 'FULL SCREEN'], ...(app.hdr?.supported ? [['hdr', app.hdr.label]] : []));
       if (app.onExit) extra.push(['quit', 'EXIT']);
       legend(input, extra, 1210, ly + 50, 22);
     }

@@ -597,7 +597,7 @@ export function createRenderer(cv, app0) {
     if (touchy(app)) label('DRAG ANYWHERE TO STEER', cx, by, P ? 30 : 24, TEXT, 500, 'center', 3);
     else {
       prompt(input, '{steer} STEER   {pause} PAUSE', cx, by, P ? 26 : 22, MUTED, 'center');
-      const extra = [...(input.device.kind === 'keyboard' ? [`{sound} ${app.soundOn ? 'SOUND ON' : 'SOUND OFF'}`, '{fullscreen} FULL SCREEN'] : []), ...(app.onExit ? ['{quit} EXIT'] : [])];
+      const extra = [...(input.device.kind === 'keyboard' ? [`{sound} ${app.soundOn ? 'SOUND ON' : 'SOUND OFF'}`, '{fullscreen} FULL SCREEN', ...(app.hdr?.supported ? [`{hdr} ${app.hdr.label}`] : [])] : []), ...(app.onExit ? ['{quit} EXIT'] : [])];
       if (extra.length) prompt(input, extra.join('   '), cx, by + 44, P ? 24 : 20, MUTED, 'center');
       prompt(input, 'PRESS {start}', cx, L.H - (P ? 120 : 46), P ? 40 : 30, rgba(Lt.accent, pulse(t)), 'center', 600);
     }

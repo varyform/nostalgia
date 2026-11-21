@@ -314,7 +314,7 @@ export function createCgaRenderer(cv) {
       text(label, (W - w) / 2, y, sel ? 3 : 1);
       if (sel && Math.floor(t * 3) % 2) { text('>', (W - w) / 2 - 10, y, 2); text('<', (W + w) / 2 + 4, y, 2); }
     });
-    prompt(app.input, '{move} DIG  {fire} FIRE  {sound} SOUND', 186, 1);
+    prompt(app.input, `{move} DIG  {fire} FIRE  {sound} SOUND${app.hdr?.supported ? `  {hdr} ${app.hdr.label}` : ''}`, 186, 1);
   }
   function drawEntry(app, t) {
     g.fillStyle = P[0]; g.fillRect(0, 0, W, H);

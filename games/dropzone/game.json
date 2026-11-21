@@ -30,7 +30,8 @@
       "jump": { "keys": ["Space"], "pad": ["South"] },
       "pause": { "keys": ["Escape", "KeyP"], "pad": ["Start"] },
       "back": { "keys": ["Escape"], "pad": ["East"] },
-      "mute": { "keys": ["KeyM"] }
+      "mute": { "keys": ["KeyM"] },
+      "hdr": { "keys": ["KeyL"] }
     },
     "display": {
       "move": { "keys": ["WASD"], "pad": ["LStick"] },

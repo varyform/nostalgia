@@ -492,7 +492,7 @@ export function createHdRenderer(cv) {
     glass(px, py, pw, ph);
     if (app.page === 0) howTo(app, px, py, pw, t); else scores(app, px, py, pw, t);
     drawMenu(app, (app.items().length > 2 ? 830 : 840) * u, t);
-    legend(app.input, [[['move', 'Dig'], ['fire', 'Fire'], ['pause', 'Pause'], ['sound', app.soundOn ? 'Sound on' : 'Sound off']]], cw / 2, 1010 * u, 22);
+    legend(app.input, [[['move', 'Dig'], ['fire', 'Fire'], ['pause', 'Pause'], ['sound', app.soundOn ? 'Sound on' : 'Sound off'], ...(app.hdr?.supported ? [['hdr', `HDR ${app.hdr.label.slice(4).toLowerCase()}`]] : [])]], cw / 2, 1010 * u, 22);
   }
   function drawEntry(app, t) {
     g.drawImage(bg, 0, 0);

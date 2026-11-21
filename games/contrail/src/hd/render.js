@@ -308,7 +308,7 @@ export function createRenderer(cv, app0) {
   function draw(app) {
     lastApp = app;
     if (destroyed) return;
-    if (stepN === lastStep && !dirty) return; // nothing moved since the last frame
+    if (stepN === lastStep && !dirty) return false; // nothing moved since the last frame (and nothing new to copy)
     lastStep = stepN; dirty = false;
     const sim = app.sim, playing = app.state === 'play' || app.state === 'pause';
     if (R && !R.lost()) {

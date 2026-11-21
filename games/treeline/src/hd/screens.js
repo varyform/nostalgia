@@ -89,7 +89,8 @@ function title(ui, app) {
       ui.text(`${app.resume.label}${ago ? '  ·  ' + ago : ''}`, R.x + 30, R.y + R.h + 22, 19, COL.dim, { wgt: 500, sp: 1 });
     }
   });
-  ui.legend(app.input, [['menu', 'Choose'], ['start', 'Select'], ...(app.onExit ? [['quit', 'Exit']] : []), ['sound', app.soundOn ? 'Sound on' : 'Sound off'], ['fullscreen', 'Full screen']], 480, 1010, 20);
+  // the HDR entry adds to the right: the row keeps its left edge
+  ui.legend(app.input, [['menu', 'Choose'], ['start', 'Select'], ...(app.onExit ? [['quit', 'Exit']] : []), ['sound', app.soundOn ? 'Sound on' : 'Sound off'], ['fullscreen', 'Full screen'], ...(app.hdr?.supported ? [['hdr', `HDR ${app.hdr.label.slice(4).toLowerCase()}`]] : [])], app.hdr?.supported ? 558 : 480, 1010, 20);
   ui.text('AFTER LHX ATTACK CHOPPER (1990)', W - 60, 1030, 16, COL.faint, { align: 'right', wgt: 500, sp: 3 });
 }
 

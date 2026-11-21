@@ -3,6 +3,7 @@
 // boot(canvas, { demo: true, pilot }) is attract mode (?demo=on, the launcher's preview): the
 // same simulation and renderer with no DOM besides the canvas, no listeners, no audio, no
 // storage, and the autopilot (autopilot.js) at the controls. onExit returns to the launcher.
+import { createHdr } from '@nostalgia/game/hdr';
 import { listeners, onAway, storage } from '@nostalgia/game/runtime';
 import { createInput, menuNav, glyphHTML } from '@nostalgia/input';
 import { createAutosave, savedAgo } from '@nostalgia/save';
@@ -465,6 +466,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,'rgba(0,0,0,0.6)');v.fillStyle=gr;v.fillRect(0,0,VIGNETTE.width,VIGNETTE.height);
   }
   listen(window,'resize',resize);resize();
+  const hdr=createHdr([cv],{enabled:!demo});   // the main canvas only: the minimap and briefing map are part of the HUD and screens over it
 
   /* ---------- input ---------- */
   // bindings come from game.json: keyboard+mouse are the original ones, pad bindings are positional (South = A / ✕).
@@ -487,6 +489,8 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     listen(cv,'contextmenu',e=>e.preventDefault());
     onAway(listen, ()=>{if(inPlay()&&!G.paused)setPaused(true);});
     input.on('mute',()=>{audio.setOn(!audio.on);toast(audio.on?'Sound on':'Sound off');});
+    const hdrHint=()=>{$('hdrHint').classList.toggle('hidden',!hdr.supported);$('hdrLevel').textContent=`hdr ${hdr.label.slice(4).toLowerCase()}`;};
+    input.on('hdr',()=>{hdr.cycle();hdrHint();});hdrHint();
     // pad Start outside play goes forward: the focused operation card or the screen's primary button (Start, Start deploys)
     input.on('pause',()=>{if(inPlay())setPaused(!G.paused);else if(padAim()){const f=menuFocus(),el=f&&f.classList.contains('mcard')?f:menuDefault();if(el)el.click();}});
     input.on('back',()=>{if(G.state==='brief')toTitle();else if(G.state==='title'&&onExit)onExit();});
@@ -1425,7 +1429,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     if(pilot)pilot.step(dt);   // the autopilot sets its pad before the input reads it
     const live=inPlay()&&!G.paused;input.update();
     if(!live&&inPlay()&&!G.paused)inputLock=true;if(inputLock&&!PLAY_ACTS.some(a=>input.held(a)))inputLock=false;
-    update(dt);render();
+    update(dt);render();hdr.present();
   }
   let last=performance.now(),raf=0,stopped=false;
   const hiddenTab=()=>document.visibilityState==='hidden';
@@ -1467,7 +1471,7 @@ export function boot(canvas,{demo=false,reducedMotion=false,op=0,pilot:makePilot
     if(stopped)return;stopped=true;
     cancelAnimationFrame(raf);
     offAll();
-    if(nav)nav.destroy();input.destroy();audio.destroy();
+    if(nav)nav.destroy();input.destroy();hdr.destroy();audio.destroy();
     // drop the terrain cache's backing stores now rather than whenever the collector gets to them
     if(G.world)for(const c of G.world.chunks.values())c.width=c.height=0;
     G.world=G.player=G.plane=G.heli=null;

@@ -1,4 +1,5 @@
 'use strict';
+import { createHdr } from '@nostalgia/game/hdr';
 import { canvasPoint, fitWide, fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput, drawGlyph, measureGlyph, parsePrompt } from '@nostalgia/input';
 import { createAutosave, savedAgo } from '@nostalgia/save';
@@ -28,6 +29,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     v.fillStyle = gr; v.fillRect(0, 0, cw, ch);
   }
   const unfit = fitWide(cv, { onFit: fit });
+  const hdr = createHdr([cv], { enabled: !demo });
 
   // soft sprites
   function radial(stops, size = 64) {
@@ -83,6 +85,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
   if (!demo) {
     // fullscreen must be requested from the input event itself, not from the game loop
     input.on('fullscreen', fullscreen);
+    input.on('hdr', () => hdr.cycle());
     listen(window, 'keydown', audioInit);
     listen(cv, 'dblclick', fullscreen);
     onAway(listen, () => { if (state === 'play' && !paused) { paused = true; audio.engine(false); } });
@@ -1581,13 +1584,14 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     const x = panel(980 * u, 290 * u, 380 * u);
     const L1 = ['Land near agents to pick them up', 'Deliver them to outposts and HQ', 'Bomb prison huts to free captives', 'Shoot fuel depots to refuel'];
     L1.forEach((s, i) => label(s.toUpperCase(), x + 50 * u, 440 * u + i * 44 * u, 24, i % 2 ? '#ffffff' : '#ffd98a', 600, 'left', 2));
-    // keyboard-only extras (sound, fullscreen) stay off the pad legend
+    // keyboard-only extras (sound, fullscreen, hdr) stay off the pad legend; a longer list packs tighter in the panel
     const C = [['fly', 'FLY'], ['fire', 'FIRE'], ['bomb', 'BOMB'], ['pause', 'PAUSE']];
-    if (!onPad()) C.push(['sound', 'SOUND'], ['fullscreen', 'FULLSCREEN']);
+    if (!onPad()) C.push(['sound', 'SOUND'], ['fullscreen', 'FULLSCREEN'], ...(hdr.supported ? [['hdr', hdr.label]] : []));
     if (onExit) C.push(['quit', 'EXIT']);
+    const dy = Math.min(38, 228 / (C.length - 1)) * u;
     C.forEach(([k, v], i) => {
-      prompt('{' + k + '}', x + 640 * u, 440 * u + i * 38 * u, 22, '#7ff6ff', 700, 'right', 2);
-      label(v, x + 670 * u, 440 * u + i * 38 * u, 22, 'rgba(255,255,255,0.8)', 600, 'left', 2);
+      prompt('{' + k + '}', x + 640 * u, 440 * u + i * dy, 22, '#7ff6ff', 700, 'right', 2);
+      label(v, x + 670 * u, 440 * u + i * dy, 22, 'rgba(255,255,255,0.8)', 600, 'left', 2);
     });
     const a = 0.55 + 0.45 * Math.sin(T * 4);
     if (resume) drawMenu(a);
@@ -1646,7 +1650,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
 
   // ---------- main loop ----------
   // taps last one fixed step
-  const ticker = fixedLoop({ dt: DT, step: () => { update(DT); taps.clear(); }, draw: render });
+  const ticker = fixedLoop({ dt: DT, step: () => { update(DT); taps.clear(); }, draw: () => { render(); hdr.present(); } });
   if (demo) {
     mi = mission % MISSIONS.length; startMission();
     // airborne by the first frame; a still demo shows the mission a few seconds in
@@ -1662,6 +1666,7 @@ export function boot(cv, { demo = false, reducedMotion = false, mission = 0, sou
     ticker.stop();
     offAll(); unfit();
     input.destroy();
+    hdr.destroy();
     audio.destroy();
   }
   return { stop };

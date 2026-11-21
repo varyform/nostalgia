@@ -12,6 +12,7 @@
 //   items()    ['continue'?, 'play', 'scores', 'exit'?]   the title menu, at app.menu
 //   page       0 the title menu, 1 the score table (SCORES, or ←/→)
 //   pauseItems() ['resume', 'sound', 'quit']               at app.pauseMenu
+import { createHdr } from '@nostalgia/game/hdr';
 import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave } from '@nostalgia/save';
@@ -79,6 +80,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     pauseItems: () => ['resume', 'sound', 'quit'],
   };
   const view = renderer(cv, app);
+  const hdr = createHdr([cv], { enabled: !demo });
+  app.hdr = hdr;
   function setState(s) {
     // back on the title: CONTINUE comes and goes with the checkpoint, and a new one is picked first
     if (s === 'title' && app.state !== 'title') {
@@ -99,6 +102,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'pointerdown', unlock);
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', () => { if (app.state !== 'entry') toggleFullscreen(); }); // from the key event itself
+    input.on('hdr', () => { if (app.state !== 'entry') hdr.cycle(); });
     listen(cv, 'dblclick', () => toggleFullscreen());
     onAway(listen, () => { if (app.state === 'play') { setState('pause'); audio.sfx('pause'); } });
     // initials can be typed straight in
@@ -322,7 +326,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     sound();
     sim.events.length = 0;
   }
-  const loop = fixedLoop({ dt: DT, step: tick, draw: () => view.draw(app) });
+  const loop = fixedLoop({ dt: DT, step: tick, draw: () => { view.draw(app); hdr.present(); } });
   if (demo) {
     demoLoad();
     // a still demo shows a fight a little way in
@@ -344,6 +348,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     offAll();
     input.destroy();
     view.destroy();
+    hdr.destroy();
     audio?.destroy();
   }
   return { stop };

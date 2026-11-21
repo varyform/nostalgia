@@ -627,7 +627,7 @@ export function createHdRenderer(cv) {
       [['special', 'SPECIAL'], ['morph', 'MORPH', true], ['pause', 'PAUSE']],
     ];
     const last = [['map', 'MAP']];
-    if (kb) last.push(['sound', 'SOUND'], ['fullscreen', 'FULLSCREEN']);
+    if (kb) last.push(['sound', 'SOUND'], ['fullscreen', 'FULLSCREEN'], ...(app.hdr?.supported ? [['hdr', app.hdr.label]] : []));
     if (app.onExit) last.push(['quit', 'EXIT']);
     rows.push(last);
     legend(input, rows, cw / 2, 740 * u, 50, 20);

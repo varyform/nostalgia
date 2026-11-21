@@ -23,7 +23,8 @@
       "back": { "keys": ["Escape", "Backspace"], "pad": ["East"] },
       "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
       "sound": { "keys": ["KeyM"] },
-      "fullscreen": { "keys": ["KeyF"] }
+      "fullscreen": { "keys": ["KeyF"] },
+      "hdr": { "keys": ["KeyL"] }
     },
     "display": {
       "steer": { "keys": ["Arrows"], "pad": ["Dpad"], "touch": "Drag" },

@@ -26,7 +26,8 @@
       "restart": { "keys": ["KeyR"], "pad": ["North"] },
       "edit": { "keys": ["KeyE"], "pad": ["West"] },
       "sound": { "keys": ["KeyM"] },
-      "fullscreen": { "keys": ["KeyF"] }
+      "fullscreen": { "keys": ["KeyF"] },
+      "hdr": { "keys": ["KeyL"] }
     },
     "display": {
       "move": { "keys": ["ArrowsH"], "pad": ["DpadH"], "touch": "Drag" },

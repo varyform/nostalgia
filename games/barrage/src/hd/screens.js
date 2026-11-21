@@ -56,6 +56,7 @@ export function createScreens(g, ui, { drawField, hud }) {
     const kb = app.input.device.kind === 'keyboard';
     const extra = [['start', 'SELECT']];
     if (kb) extra.push(['sound', app.soundOn ? 'SOUND ON' : 'SOUND OFF'], ['fullscreen', 'FULL SCREEN']);
+    if (kb && app.hdr?.supported) extra.push(['hdr', app.hdr.label]);
     if (app.onExit) extra.push(['quit', 'EXIT']);
     ui.legend(app.input, [[['aim', 'ANGLE'], ['power', 'POWER'], ['fire', 'FIRE'], ['next', 'WEAPON'], ['items', 'GEAR']], extra], 960, 940, 48, 22);
     ui.label('READ THE WIND  ·  MIND THE SLOPE  ·  SPEND WISELY', 960, 1056, 18, 'rgba(255,255,255,0.4)', 600, 'center', 6);

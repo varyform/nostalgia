@@ -2,6 +2,7 @@
 // over, victory), the attract-mode demo, sound, the saved best and the autosave (a checkpoint
 // as each zone begins, resumed from the title's CONTINUE). It never draws: a
 // renderer (vga/render.js today) reads this `app` object every frame.
+import { createHdr } from '@nostalgia/game/hdr';
 import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave, savedAgo } from '@nostalgia/save';
@@ -32,6 +33,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   const sim = createSim();
   const audio = demo ? null : score({ on: sound });
   const view = renderer(cv);
+  const hdr = createHdr([cv], { enabled: !demo });
 
   const saved = storage(BEST_KEY, { enabled: !demo });
   let best = { score: 0, time: 0, ...saved.load({}) };
@@ -45,6 +47,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     savedAgo: () => (app.saved ? savedAgo(app.saved.at) : ''),
     get soundOn() { return audio ? audio.on : false; },
   };
+  app.hdr = hdr;
   function setState(s) {
     app.state = s; app.stT = 0;
     if (s === 'title') { app.saved = autosave.load(); app.menu = 0; }
@@ -73,6 +76,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'keydown', unlock);
     listen(window, 'pointerdown', unlock);
     input.on('fullscreen', toggleFullscreen); // from the key event itself, as browsers require
+    input.on('hdr', () => hdr.cycle());
     listen(cv, 'dblclick', toggleFullscreen);
     onAway(listen, () => { if (app.state === 'play') setState('pause'); });
   }
@@ -177,7 +181,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     sound();
     sim.events.length = 0;
   }
-  const loop = fixedLoop({ dt: DT, step: tick, draw: () => view.draw(app) });
+  const loop = fixedLoop({ dt: DT, step: tick, draw: () => { view.draw(app); hdr.present(); } });
   if (demo) {
     startSegment();
     app.fade = 0;
@@ -196,6 +200,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     offAll();
     input.destroy();
     view.destroy();
+    hdr.destroy();
     audio?.destroy();
   }
   return { stop };

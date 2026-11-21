@@ -482,7 +482,7 @@ export function createRenderer(cv) {
     const input = app.input, kb = input.device.kind === 'keyboard';
     const rows = [[['move', 'RUN'], ['climb', 'CLIMB'], ['digL', 'DIG LEFT'], ['digR', 'DIG RIGHT']], [['restart', 'GIVE UP LEVEL'], ['pause', 'PAUSE']]];
     const extra = [];
-    if (kb) extra.push(['sound', 'SOUND'], ['fullscreen', 'FULL SCREEN']);
+    if (kb) extra.push(['sound', 'SOUND'], ['fullscreen', 'FULL SCREEN'], ...(app.hdr?.supported ? [['hdr', app.hdr.label]] : []));
     if (app.onExit) extra.push(['quit', 'EXIT']);
     if (extra.length) rows.push(extra);
     legend(input, rows, cw / 2, 790 * u, 46, 20);

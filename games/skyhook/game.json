@@ -23,7 +23,8 @@
       "restart": { "keys": ["KeyR"], "pad": ["North"] },
       "quit": { "keys": ["KeyQ"], "pad": ["Select"] },
       "sound": { "keys": ["KeyM"] },
-      "fullscreen": { "keys": ["KeyF"] }
+      "fullscreen": { "keys": ["KeyF"] },
+      "hdr": { "keys": ["KeyL"] }
     },
     "display": {
       "fly": { "keys": ["Arrows"], "pad": ["LStick"] },

@@ -458,6 +458,7 @@ export function createRenderer(cv) {
     const rows = [[['move', 'MOVE'], ['jump', 'JUMP', true], ['climb', 'CLIMB']], [['drop', 'DROP THROUGH'], ['pause', 'PAUSE']]];
     const extra = [];
     if (kb) extra.push(['sound', 'SOUND'], ['fullscreen', 'FULL SCREEN']);
+    if (kb && app.hdr?.supported) extra.push(['hdr', app.hdr.label]);
     if (app.onExit) extra.push(['quit', 'EXIT']);
     if (extra.length) rows.push(extra);
     legend(input, rows, cw / 2, (rects[0]?.it === 'continue' ? 796 : 780) * u, 48, 21);
