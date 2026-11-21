@@ -2,7 +2,7 @@
 # check=error=true
 
 # The pages are built and committed in dist/ (mise run build), so the image only serves them.
-FROM docker.io/library/nginx:1.29-alpine
+FROM docker.io/library/nginx:1.30-alpine
 
 # `kamal shell` opens busybox sh (there's no bash here), which reads $ENV when interactive.
 RUN echo "alias ll='ls -lah'" > /etc/profile.d/ll.sh
