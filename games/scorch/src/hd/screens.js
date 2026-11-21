@@ -424,7 +424,7 @@ function title(g, ui, app, t) {
     }
   });
   text(g, 'TWELVE RANKED DRIVERS STAND BETWEEN YOU AND THE CHAMPION, IVO MARROW.', 116, 950, 23, COL.faint, { wgt: 600, spacing: 2 });
-  footer(g, app, `{menu} Choose   {start} Select   {sound} Sound ${app.soundOn ? 'on' : 'off'}   {fullscreen} Full screen${app.onExit ? '   {quit} Exit' : ''}`, t, false);
+  footer(g, app, `{menu} Choose   {start} Select   {sound} Sound ${app.soundOn ? 'on' : 'off'}   {fullscreen} Full screen${app.hdr?.supported ? `   {hdr} HDR ${app.hdr.label.slice(4).toLowerCase()}` : ''}${app.onExit ? '   {quit} Exit' : ''}`, t, false);
 }
 
 // ---------- the paddock ----------

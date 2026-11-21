@@ -18,6 +18,7 @@
 // A tap asks the screens (view.menuAt) what is under it: { i } an entry or a row (with
 // act: 'buy' | 'sell' on a garage row's buttons), { tab }, { back }, { letter, d } / { done }
 // on the initials screen. Nothing else changes how a screen is driven.
+import { createHdr } from '@nostalgia/game/hdr';
 import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave } from '@nostalgia/save';
@@ -93,6 +94,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     pauseItems: () => ['resume', 'sound', 'retire'],
   };
   const view = renderer(cv, app);
+  const hdr = createHdr([cv], { enabled: !demo });
+  app.hdr = hdr;
   function go(s) {
     // back on the title: CONTINUE comes and goes with the checkpoint, and is picked first
     if (s === 'title') { app.saved = autosave.load(); app.menu = 0; }
@@ -108,6 +111,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'pointerdown', unlock);
     listen(window, 'touchstart', unlock);
     input.on('fullscreen', () => { if (app.state !== 'entry') toggleFullscreen(); }); // from the key event itself
+    input.on('hdr', () => { if (app.state !== 'entry') hdr.cycle(); });
     listen(cv, 'dblclick', () => toggleFullscreen());
     onAway(listen, () => { if (app.state === 'race') { go('pause'); sfx('pause'); } });
     // initials can be typed straight in
@@ -554,7 +558,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     sound();
     evs.length = 0;
   }
-  const loop = fixedLoop({ dt: DT, step: tick, draw: () => view.draw(app) });
+  const loop = fixedLoop({ dt: DT, step: tick, draw: () => { view.draw(app); hdr.present(); } });
   if (demo) {
     demoLoad();
     // a still demo shows a race a little way in
@@ -573,6 +577,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     offAll();
     input.destroy();
     view.destroy();
+    hdr.destroy();
     audio?.destroy();
   }
   return { stop };
