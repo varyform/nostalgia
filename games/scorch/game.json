@@ -1,0 +1,58 @@
+{
+  "title": "Scorch",
+  "exe": "SCORCH.EXE",
+  "after": "Death Rally",
+  "year": 1996,
+  "genre": "Car combat",
+  "tags": ["Racing", "Car combat", "Top-down"],
+  "blurb": "The Scorch Circuit runs outlaw road wars across a dying frontier. Start unranked in a battered compact, race three rivals for cash with guns, mines and turbo, rebuild in the garage, and climb twelve ranks to face the champion, Ivo Marrow.",
+  "facts": [
+    ["Circuit", "12 ranked drivers, then the champion's final race"],
+    ["Tracks", "8, through red canyon, rust docks, a frozen pass and a neon city"],
+    ["Garage", "Cars, engine, tyres and armour; ammo, mines, turbo, repairs"],
+    ["Input", "Keyboard, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"], "touch": "◀" },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"], "touch": "▶" },
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "gas": { "keys": ["ArrowUp", "KeyW"], "pad": ["R2"], "touch": "GAS" },
+      "brake": { "keys": ["ArrowDown", "KeyS"], "pad": ["L2"], "touch": "BRAKE" },
+      "fire": { "keys": ["Space"], "pad": ["South"], "touch": "FIRE" },
+      "mine": { "keys": ["KeyX"], "pad": ["West"], "touch": "MINE" },
+      "turbo": { "keys": ["KeyZ", "ShiftLeft", "ShiftRight"], "pad": ["R1"], "touch": "TURBO" },
+      "sell": { "keys": ["KeyX", "Delete"], "pad": ["West"], "touch": "SELL" },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"], "touch": "II" },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"], "touch": "BACK" },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] }
+    },
+    "display": {
+      "steer": { "keys": ["ArrowsH"], "pad": ["LStick"], "touch": "◀ ▶" },
+      "menu": { "keys": ["Arrows"], "pad": ["Dpad"] },
+      "tabs": { "keys": ["ArrowsH"], "pad": ["DpadH"] },
+      "letters": { "keys": ["Arrows"], "pad": ["Dpad"] }
+    }
+  },
+  "controls": [
+    ["steer", "Steer"],
+    ["gas", "Accelerate"],
+    ["brake", "Brake"],
+    ["fire", "Machine gun"],
+    ["mine", "Drop a mine behind"],
+    ["turbo", "Turbo burst"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · 16:9 · top-down",
+      "note": "Painted tracks through red canyons, rain-soaked docks, a frozen pass and a neon city at night, with dust, skid marks, smoke and fire. The career is saved in the browser."
+    }
+  ]
+}
