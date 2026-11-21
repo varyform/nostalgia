@@ -2,6 +2,7 @@
 // initials), the autosave checkpoint behind CONTINUE (taken after every turn), the attract-mode
 // demo with its gliding hand, sound, the pointer and the saved scores and stats. It never draws:
 // the renderer (hd/render.js) reads this `app` object every frame and answers hit tests.
+import { createHdr } from '@nostalgia/game/hdr';
 import { fixedLoop, listeners, onAway, storage, toggleFullscreen } from '@nostalgia/game/runtime';
 import { createInput } from '@nostalgia/input';
 import { createAutosave, savedAgo } from '@nostalgia/save';
@@ -61,6 +62,8 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     titleItems: () => [...(resume ? ['continue'] : []), 'play', 'scores', ...(onExit ? ['exit'] : [])],
   };
   const view = createRenderer(cv, app);
+  const hdr = createHdr([cv], { enabled: !demo });
+  app.hdr = hdr;
   function setState(s) { app.state = s; app.stT = 0; }
   const sfx = (name, e) => audio?.sfx(name, e);
 
@@ -71,6 +74,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     listen(window, 'keydown', unlock);
     listen(window, 'pointerdown', unlock);
     input.on('fullscreen', () => { if (app.state !== 'initials') toggleFullscreen(); }); // from the key event itself
+    input.on('hdr', () => { if (app.state !== 'initials') hdr.cycle(); });
     onAway(listen, () => { if (app.state === 'play') { app.pmenu = 0; setState('pause'); } });
     listen(window, 'keydown', e => {
       if (app.state !== 'initials' || !/^Key[A-Z]$/.test(e.code)) return;
@@ -346,7 +350,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     music();
     sim.events.length = 0;
   }
-  const loop = fixedLoop({ dt: DT, step: tick, draw: () => view.draw(app) });
+  const loop = fixedLoop({ dt: DT, step: tick, draw: () => { view.draw(app); hdr.present(); } });
   if (demo) {
     startDemo();
     app.fade = 0;
@@ -367,6 +371,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     offAll();
     input.destroy();
     view.destroy();
+    hdr.destroy();
     audio?.destroy();
   }
   return { stop };

@@ -449,7 +449,7 @@ export function createRenderer(cv, app0) {
     if (app.touch?.active || input.device.kind === 'touch') label('TAP A MARBLE, THEN WHERE IT GOES', cx, by, P ? 30 : 24, TEXT, 500, 'center', 3);
     else {
       prompt(input, '{aim} CURSOR   {select} PICK UP · SET DOWN   {undo} TAKE BACK', cx, by, P ? 26 : 22, MUTED, 'center');
-      const extra = ['{pause} PAUSE', ...(input.device.kind === 'keyboard' ? [`{sound} ${app.soundOn ? 'SOUND ON' : 'SOUND OFF'}`, '{fullscreen} FULL SCREEN'] : []), ...(app.onExit ? ['{quit} EXIT'] : [])];
+      const extra = ['{pause} PAUSE', ...(input.device.kind === 'keyboard' ? [`{sound} ${app.soundOn ? 'SOUND ON' : 'SOUND OFF'}`, '{fullscreen} FULL SCREEN', ...(app.hdr?.supported ? [`{hdr} ${app.hdr.label}`] : [])] : []), ...(app.onExit ? ['{quit} EXIT'] : [])];
       prompt(input, extra.join('   '), cx, by + 46, P ? 24 : 20, MUTED, 'center');
     }
     if (input.device.kind !== 'touch') prompt(input, 'PRESS {start}', cx, L.H - (P ? 120 : 50), P ? 40 : 32, `rgba(243,211,166,${pulse(t)})`, 'center', 600);
