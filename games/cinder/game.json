@@ -8,7 +8,7 @@
   "blurb": "Wren, a lantern-runner from the valley, climbs at dusk to the Cinder Keep, where the Ash Regent holds her teacher. Unarmed, she meets his masked guards one at a time: run between them, square up before they strike, and never turn your back.",
   "facts": [
     ["Scenes", "7, from the mountain path to the dawn garden"],
-    ["Fighting", "Three heights, finishers, sweeps, spinning kicks, backflips"],
+    ["Fighting", "Three heights, finishers, sweeps and flips"],
     ["Foes", "Footmen, brawlers, adepts and the Ash Regent"],
     ["Input", "Keyboard, gamepad, touch"]
   ],
@@ -39,12 +39,12 @@
     }
   },
   "controls": [
-    ["walk", "Walk; away from a foe blocks, twice flips back"],
-    ["stance", "Run or fight stance"],
-    ["punch", "Punch (up: high, down: low, toward: uppercut)"],
-    ["kick", "Kick (toward: flying, away: spinning, + down: sweep)"],
-    ["aim", "Up / down aim; down ducks; up twice sways back"],
-    ["bow", "Bow, in run stance"]
+    ["walk", "Walk; away blocks, ×2 flips"],
+    ["stance", "Switch stance"],
+    ["punch", "Punch; toward: uppercut"],
+    ["kick", "Kick; toward/away: specials"],
+    ["aim", "Height; down ducks, ↑×2 sways"],
+    ["bow", "Bow (run stance)"]
   ],
   "versions": [
     {
