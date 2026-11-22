@@ -124,7 +124,8 @@ the mechanics. `game.json` credits the original in `after` + `year`.
 - Commit only when asked, push only when asked. Stage only the files of the change (several agents' work is often in
   the tree at once); check `git show --stat` after.
 - Deploy: `mise run deploy` (Kamal, `config/deploy.yml`) → nginx serving `dist/` at https://ogg.ol3h.org on
-  `px.kamal`, TLS at Cloudflare. Kamal builds from the committed HEAD, not the working tree. Deploying publishes:
+  `px.kamal`, TLS at Cloudflare, and at https://ogg.varyform.info (`-d varyform`, `config/deploy.varyform.yml`),
+  TLS by kamal-proxy. Kamal builds from the committed HEAD, not the working tree. Deploying publishes:
   only when asked.
 - iOS: `mise run ios` builds the wrapper in `ios/` (XcodeGen; `project.yml` is the source, the `.xcodeproj` is
   generated) around an offline copy of `dist/` (`scripts/offline.js` inlines the Google Fonts) and runs it on the Duo

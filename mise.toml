@@ -40,8 +40,8 @@ description = "Everything CI runs"
 depends = ["check", "test", "build"]
 
 [tasks.deploy]
-description = "Roll out the committed dist/ to ogg.ol3h.org (Kamal builds from HEAD)"
-run = "kamal deploy"
+description = "Roll out the committed dist/ to ogg.ol3h.org and ogg.varyform.info (Kamal builds from HEAD)"
+run = ["kamal deploy", "kamal deploy -d varyform"]
 
 [tasks.rig-sync]
 description = "Copy the rig editor's runtime into packages/rig"

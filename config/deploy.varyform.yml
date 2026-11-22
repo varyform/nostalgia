@@ -1,0 +1,10 @@
+# The varyform.info copy: `kamal deploy -d varyform` (mise run deploy does both). The same image
+# as ogg.ol3h.org, on the server that runs varyform.info and its other projects. There
+# kamal-proxy terminates TLS itself (Let's Encrypt), as for the website, behind Cloudflare.
+servers:
+  web:
+    - 134.209.255.101
+
+proxy:
+  ssl: true
+  host: ogg.varyform.info
