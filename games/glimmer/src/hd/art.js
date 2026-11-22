@@ -51,16 +51,33 @@ export function prng(seed) {
 }
 export const hash2 = (c, r) => ((c * 73856093) ^ (r * 19349663)) >>> 0;
 
+// ---------- soft light: a radial sprite, falloff f(d) for d 0 (centre) … 1 (rim) ----------
+// Pixel by pixel rather than a gradient: f fades out with zero slope at the rim, so no ring shows
+// where it ends, and a little dither breaks the 8-bit steps a dark falloff would band into.
+export function softSprite(size, rgb, f) {
+  const s = canvas(size, size), x = s.getContext('2d'), img = x.createImageData(size, size), d = img.data;
+  const [r, gg, b] = rgb.split(',').map(Number), h = size / 2;
+  for (let j = 0; j < size; j++) {
+    for (let i = 0; i < size; i++) {
+      const q = Math.hypot(i + 0.5 - h, j + 0.5 - h) / h, k = (j * size + i) * 4;
+      const n = ((hash2(i, j) & 255) / 255 - 0.5) / 255; // ±half a step
+      d[k] = r; d[k + 1] = gg; d[k + 2] = b;
+      d[k + 3] = q >= 1 ? 0 : Math.max(0, Math.min(255, Math.round((f(q) + n) * 255)));
+    }
+  }
+  x.putImageData(img, 0, 0);
+  return s;
+}
+// a bright core in a wide halo, both bells that flatten out to nothing
+export const glowFalloff = q => 0.5 * Math.max(0, 1 - (q / 0.3) ** 2) ** 2 + 0.5 * (1 - q * q) ** 2;
+
 // ---------- glows: additive radial sprites, one per colour ----------
 const glows = new Map();
 export function glow(g, rgb, x, y, r, a) {
   if (a <= 0.003 || r <= 0) return;
   let s = glows.get(rgb);
   if (!s) {
-    s = canvas(128, 128);
-    const x2 = s.getContext('2d'), gr = x2.createRadialGradient(64, 64, 0, 64, 64, 64);
-    gr.addColorStop(0, `rgba(${rgb},1)`); gr.addColorStop(0.25, `rgba(${rgb},0.45)`); gr.addColorStop(1, `rgba(${rgb},0)`);
-    x2.fillStyle = gr; x2.fillRect(0, 0, 128, 128);
+    s = softSprite(128, rgb, glowFalloff);
     glows.set(rgb, s);
   }
   const op = g.globalCompositeOperation, ga = g.globalAlpha;

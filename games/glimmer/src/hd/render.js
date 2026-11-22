@@ -16,7 +16,7 @@ import { BRUSHES, frame, pads, toolbar } from '../layout.js';
 import { COLS, ROWS, U, parseLevel } from '../level.js';
 import { LEVELS, WORLDS } from '../levels.js';
 import { T } from '../sim.js';
-import { PAL, TAU, canvas, glow, hash2, makeBackdrop, makeTiles, paintLevel, rgba, thumbnail } from './art.js';
+import { PAL, TAU, canvas, glow, hash2, makeBackdrop, makeTiles, paintLevel, rgba, softSprite, thumbnail } from './art.js';
 import { drawSentinel, drawShard, drawWren } from './sprites.js';
 
 const SERIF = "'Cinzel','Trajan Pro','Georgia',serif";
@@ -60,12 +60,8 @@ export function createRenderer(cv) {
   // the still demo frame is drawn once; draw it again when the web fonts arrive
   void document.fonts?.ready.then(() => { if (!destroyed && lastApp) draw(lastApp); });
 
-  const LIGHT = canvas(128, 128);
-  {
-    const x = LIGHT.getContext('2d'), gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
-    gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.5, 'rgba(0,0,0,0.65)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-    x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
-  }
+  // the light a lamp or a glimmer cuts out of the dark: full near it, fading smoothly to nothing
+  const LIGHT = softSprite(128, '0,0,0', q => (1 - q * q) ** 1.6);
   const backdrop = w => backdrops[w] ?? (backdrops[w] = makeBackdrop(w, bc.width, bc.height));
   const tileSet = w => tiles[w] ?? (tiles[w] = makeTiles(PAL[w], Math.round(ts), w));
   function layerFor(L) {
