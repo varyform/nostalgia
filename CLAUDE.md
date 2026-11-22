@@ -57,6 +57,9 @@ the mechanics. `game.json` credits the original in `after` + `year`.
 
 - Canvas size comes from `innerWidth`/`innerHeight` (via `fitWide`/`fitPixels`), never from the canvas's
   `clientWidth`; DPR capped at 2, ~2560 px wide.
+- The bars a screen of another shape leaves around the game are filled with colours each page declares on `:root`
+  (`--backdrop-top`, `--backdrop-bottom`: the game's own top and bottom edges in play); pick them once by looking at
+  the game, never derive them from its frames. A page without them shows its plain background.
 - Away (blur, hidden tab, background app): `onAway(listen, …)` opens the pause screen (not in the demo). The loop
   and the synth already stop by themselves while the tab is hidden.
 - Title: a `quit` action (`Q`/`Esc`, pad East/Select) calls `onExit`; the EXIT entry shows only when `onExit` is set.

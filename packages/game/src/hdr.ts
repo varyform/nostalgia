@@ -14,8 +14,9 @@
  *
  * Off (or where WebGPU, an HDR display or the device is missing) the game's canvases show as
  * they are and nothing is copied. Outside the demo it also keeps the game's backdrop (backdrop.ts),
- * the bars around a 16:9 game on a screen of another shape, painted from the game's edges; with
- * HDR on it goes through the same grading, so the game's edge meets it without a seam. The level is one setting for every game ('nostalgia:hdr').
+ * the bars around a 16:9 game on a screen of another shape, in the colours the page declares; with
+ * HDR on it goes through the same grading, so the game's edge meets it without a seam. The level is
+ * one setting for every game ('nostalgia:hdr').
  * Shipping as WebGPU's extended tone mapping (Chrome 129+, Safari 26); a 2D canvas can't yet.
  */
 import { createBackdrop } from './backdrop.ts';
