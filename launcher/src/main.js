@@ -454,6 +454,9 @@ const stage = {
     if (!f || this.playing) return;
     this.playing = f;
     const { k, x, y, left, top } = this.boxTransform();
+    // the game first, then the zoom: it grows from the box as its title, never as the demo
+    f.contentWindow?.postMessage({ nostalgia: 'play', sound: prefs.sound }, '*');
+    await frames(2);
     document.documentElement.classList.add('is-playing');
     f.style.transform = `translate(${left + x}px, ${top + y}px) scale(${k})`;
     f.classList.add('is-playing');
@@ -472,7 +475,6 @@ const stage = {
     f.tabIndex = 0;
     document.title = `${g.title} · Nostalgia`;
     history.pushState({ playing: g.id }, '');
-    f.contentWindow?.postMessage({ nostalgia: 'play', sound: prefs.sound }, '*');
     f.focus();
   },
   // back to the box, then a fresh demo in place of the played game
@@ -502,6 +504,8 @@ const stage = {
   },
 };
 const title = document.title;
+// n painted frames (the game's first frames after `play`, before the zoom shows it)
+const frames = n => new Promise(done => (n ? requestAnimationFrame(() => frames(n - 1).then(done)) : done()));
 // the zoom's end, or its duration when the event never comes (hidden tab, no transition)
 const transitionEnd = el =>
   new Promise(done => {
