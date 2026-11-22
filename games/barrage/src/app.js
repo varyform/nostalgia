@@ -528,7 +528,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   }
 
   // ---------- sound ----------
-  function sound() {
+  function soundStep() {
     if (!audio) return;
     const live = !app.attract && (app.state === 'play' || app.state === 'roundEnd' || app.state === 'pause');
     if (live) {
@@ -558,7 +558,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     }
     if (app.banner) { app.banner.t += DT; if (app.banner.t > 1.6) app.banner = null; }
     view.events(sim.events, sim);
-    sound();
+    soundStep();
     sim.events.length = 0;
   }
   const loop = fixedLoop({ dt: DT, step: tick, draw: () => { view.draw(app); hdr.present(); } });

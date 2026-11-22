@@ -259,7 +259,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   const titleItems = () => [...(app.saved ? ['continue'] : []), 'play', 'editor', ...(onExit ? ['exit'] : [])];
   app.titleItems = titleItems;
 
-  function sound() {
+  function soundStep() {
     if (!audio) return;
     for (const e of sim.events) audio.sfx(e.type, e);
     const s = app.state;
@@ -275,7 +275,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   function tick() {
     update();
     view.events(sim.events, sim);
-    sound();
+    soundStep();
     sim.events.length = 0;
   }
   const loop = fixedLoop({ dt: DT, step: tick, draw: () => { view.draw(app); hdr.present(); } });

@@ -501,7 +501,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   // events that only matter for the player's own car
   const MINE = new Set(['lap', 'last', 'finish', 'low', 'pickup']);
   let revving = false;
-  function sound() {
+  function soundStep() {
     if (!audio) return;
     const st = app.state, s = app.race?.s, me = s?.cars?.[0];
     if (st === 'race' && me) {
@@ -555,7 +555,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   function tick() {
     update();
     if (app.race) view.events(evs, app.race);
-    sound();
+    soundStep();
     evs.length = 0;
   }
   const loop = fixedLoop({ dt: DT, step: tick, draw: () => { view.draw(app); hdr.present(); } });

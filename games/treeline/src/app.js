@@ -321,7 +321,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   // ---------- sound ----------
   let lastMusic, rotorOn = false;
   const SFX = new Set(['cannon', 'rocket', 'flare', 'damage', 'weapon', 'target', 'lowfuel', 'objective', 'fail', 'start', 'land', 'liftoff', 'pickup', 'crash']);
-  function sound() {
+  function soundStep() {
     if (!audio) return;
     const s = app.state, P = sim.player, live = s === 'play' && sim.status !== 'down' && P?.alive;
     if (s === 'play') {
@@ -366,7 +366,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   function tick() {
     update();
     view.events(sim.events, sim);
-    sound();
+    soundStep();
     sim.events.length = 0;
   }
   const loop = fixedLoop({ dt: DT, step: tick, draw: () => { if (view.draw(app) !== false) hdr.present(); } }); // a skipped frame leaves the WebGL buffer stale: keep the last HDR one

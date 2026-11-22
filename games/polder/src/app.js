@@ -248,7 +248,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
 
   // ---------- sound ----------
   let lastBounce = 0;
-  function sound() {
+  function soundStep() {
     if (!audio) return;
     if (app.state === 'play' || app.state === 'card') {
       for (const e of sim.events) {
@@ -275,7 +275,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     if (app.back && (app.state === 'title' || app.state === 'scores' || app.state === 'initials')) view.events(app.back.events, app.back);
     if (app.back) app.back.events.length = 0;
     view.events(sim.events, sim);
-    sound();
+    soundStep();
     sim.events.length = 0;
     if (app.state === 'play' && app.back) app.back = null; // the title's flats are made afresh next time
   }

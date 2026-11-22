@@ -272,7 +272,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
 
   // ---------- sound ----------
   let lastMusic;
-  function sound() {
+  function soundStep() {
     if (!audio) return;
     const s = app.state, P = sim.player, flying = s === 'play' && sim.status === 'fly' && P?.alive;
     if (s === 'play') {
@@ -309,7 +309,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
   function tick() {
     update();
     view.events(sim.events, sim);
-    sound();
+    soundStep();
     sim.events.length = 0;
   }
   const loop = fixedLoop({ dt: DT, step: tick, draw: () => { if (view.draw(app) !== false) hdr.present(); } }); // a skipped frame leaves the WebGL buffer stale: keep the last HDR one

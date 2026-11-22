@@ -295,7 +295,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
 
   // ---------- sound: events → effects (the jingles are the clear / die / over / win effects) ----------
   let duel = false;
-  function sound() {
+  function soundStep() {
     if (!audio) return;
     const cam = sim.s?.cam ?? 0;
     for (const e of sim.events) {
@@ -323,7 +323,7 @@ export function boot(cv, { demo = false, reducedMotion = false, sound = true, on
     update();
     if (sim.events.some(e => e.k === 'hit' && e.fx)) stopT = HIT_STOP;
     view.events(sim.events, sim);
-    sound();
+    soundStep();
     sim.events.length = 0;
   }
   const loop = fixedLoop({ dt: DT, step: tick, draw: () => { view.draw(app); hdr.present(); } });
