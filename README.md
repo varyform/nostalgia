@@ -7,24 +7,25 @@ no external assets. `dist/index.html` is the launcher, a DOS-style menu with liv
 
 ## Games
 
-| Source           | Game     | In the spirit of          | Compiled                                                   |
-| ---------------- | -------- | ------------------------- | ---------------------------------------------------------- |
-| `games/keepsake` | Keepsake | Popeye (1982)             | `dist/keepsake.html`                                       |
-| `games/brimful`  | Brimful  | Tapper (1983)             | `dist/brimful-cga.html` (CGA), `dist/brimful-hd.html` (HD) |
-| `games/glimmer`  | Glimmer  | Lode Runner (1983)        | `dist/glimmer.html`                                        |
-| `games/quarry`   | Quarry   | Digger (1983)             | `dist/quarry-cga.html` (CGA), `dist/quarry-hd.html` (HD)   |
-| `games/cinder`   | Cinder   | Karateka (1984)           | `dist/cinder.html`                                         |
-| `games/dewdrop`  | Dewdrop  | Nuts & Milk (1984)        | `dist/dewdrop.html`                                        |
-| `games/polder`   | Polder   | Xonix (1984)              | `dist/polder.html`                                         |
-| `games/skyhook`  | Skyhook  | Striker (1985)            | `dist/skyhook-cga.html` (CGA), `dist/skyhook-hd.html` (HD) |
-| `games/spindle`  | Spindle  | Nebulus (1987)            | `dist/spindle.html`                                        |
-| `games/dropzone` | Dropzone | Airborne Ranger (1988)    | `dist/dropzone.html`                                       |
-| `games/contrail` | Contrail | F29 Retaliator (1989)     | `dist/contrail.html`                                       |
-| `games/treeline` | Treeline | LHX Attack Chopper (1990) | `dist/treeline.html`                                       |
-| `games/barrage`  | Barrage  | Scorched Earth (1991)     | `dist/barrage.html`                                        |
-| `games/triform`  | Triform  | Metal Mutant (1991)       | `dist/triform-vga.html` (VGA), `dist/triform-hd.html` (HD) |
-| `games/quintet`  | Quintet  | Color Lines (1992)        | `dist/quintet.html`                                        |
-| `games/scorch`   | Scorch   | Death Rally (1996)        | `dist/scorch.html`                                         |
+| Source           | Game     | In the spirit of                | Compiled                                                   |
+| ---------------- | -------- | ------------------------------- | ---------------------------------------------------------- |
+| `games/keepsake` | Keepsake | Popeye (1982)                   | `dist/keepsake.html`                                       |
+| `games/brimful`  | Brimful  | Tapper (1983)                   | `dist/brimful-cga.html` (CGA), `dist/brimful-hd.html` (HD) |
+| `games/glimmer`  | Glimmer  | Lode Runner (1983)              | `dist/glimmer.html`                                        |
+| `games/quarry`   | Quarry   | Digger (1983)                   | `dist/quarry-cga.html` (CGA), `dist/quarry-hd.html` (HD)   |
+| `games/cinder`   | Cinder   | Karateka (1984)                 | `dist/cinder.html`                                         |
+| `games/dewdrop`  | Dewdrop  | Nuts & Milk (1984)              | `dist/dewdrop.html`                                        |
+| `games/polder`   | Polder   | Xonix (1984)                    | `dist/polder.html`                                         |
+| `games/skyhook`  | Skyhook  | Striker (1985)                  | `dist/skyhook-cga.html` (CGA), `dist/skyhook-hd.html` (HD) |
+| `games/spindle`  | Spindle  | Nebulus (1987)                  | `dist/spindle.html`                                        |
+| `games/dropzone` | Dropzone | Airborne Ranger (1988)          | `dist/dropzone.html`                                       |
+| `games/contrail` | Contrail | F29 Retaliator (1989)           | `dist/contrail.html`                                       |
+| `games/treeline` | Treeline | LHX Attack Chopper (1990)       | `dist/treeline.html`                                       |
+| `games/barrage`  | Barrage  | Scorched Earth (1991)           | `dist/barrage.html`                                        |
+| `games/triform`  | Triform  | Metal Mutant (1991)             | `dist/triform-vga.html` (VGA), `dist/triform-hd.html` (HD) |
+| `games/quintet`  | Quintet  | Color Lines (1992)              | `dist/quintet.html`                                        |
+| `games/swerve`   | Swerve   | Sensible World of Soccer (1994) | `dist/swerve.html`                                         |
+| `games/scorch`   | Scorch   | Death Rally (1996)              | `dist/scorch.html`                                         |
 
 ## Play
 

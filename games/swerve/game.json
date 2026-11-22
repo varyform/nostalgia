@@ -1,0 +1,56 @@
+{
+  "title": "Swerve",
+  "exe": "SWERVE.EXE",
+  "after": "Sensible World of Soccer",
+  "year": 1994,
+  "genre": "Football",
+  "tags": ["Sports", "Football", "Top-down", "Management"],
+  "blurb": "Take a struggling Second Division club in the Halvane League and drag it to the title. Tiny players on a scrolling pitch, one kick button, a ball that swerves with aftertouch, the Lantern Cup, transfers and a career that never ends.",
+  "facts": [
+    ["League", "16 invented clubs in two divisions of eight, two up and two down"],
+    ["Career", "Seasons of 14 matchdays and the Lantern Cup; transfers, wages, gates"],
+    ["Match", "One button: tap to pass, hold to shoot, steer after it to bend the ball"],
+    ["Input", "Keyboard, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "kick": { "keys": ["Space", "KeyX"], "pad": ["South"], "touch": "KICK" },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"], "touch": "II" },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"], "touch": "BACK" },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] },
+      "hdr": { "keys": ["KeyL"] }
+    },
+    "display": {
+      "move": { "keys": ["Arrows"], "pad": ["LStick"], "touch": "Stick" },
+      "aftertouch": { "keys": ["Arrows"], "pad": ["LStick"], "touch": "Stick" },
+      "tackle": { "keys": ["Space"], "pad": ["South"], "touch": "KICK" },
+      "menu": { "keys": ["Arrows"], "pad": ["Dpad"] },
+      "tabs": { "keys": ["ArrowsH"], "pad": ["DpadH"] },
+      "change": { "keys": ["ArrowsH"], "pad": ["DpadH"] },
+      "letters": { "keys": ["Arrows"], "pad": ["Dpad"] }
+    }
+  },
+  "controls": [
+    ["move", "Run, the ball loose at your feet"],
+    ["kick", "Tap: pass · hold: shoot"],
+    ["aftertouch", "After a kick: bend, lift or drive it"],
+    ["tackle", "Without the ball: slide tackle"],
+    ["pause", "Pause"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · 16:9 · top-down",
+      "note": "A mown pitch ringed by packed stands, seen from high above: tiny players in their clubs' kits, a TV-style score bug and a radar. The career is saved in the browser."
+    }
+  ]
+}
