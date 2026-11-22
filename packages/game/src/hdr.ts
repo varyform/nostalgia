@@ -13,9 +13,12 @@
  *   hdr.destroy();
  *
  * Off (or where WebGPU, an HDR display or the device is missing) the game's canvases show as
- * they are and nothing is copied. The level is one setting for every game ('nostalgia:hdr').
+ * they are and nothing is copied. Outside the demo it also keeps the game's backdrop (backdrop.ts),
+ * the bars around a 16:9 game on a screen of another shape, painted from the game's edges; with
+ * HDR on it goes through the same grading, so the game's edge meets it without a seam. The level is one setting for every game ('nostalgia:hdr').
  * Shipping as WebGPU's extended tone mapping (Chrome 129+, Safari 26); a 2D canvas can't yet.
  */
+import { createBackdrop } from './backdrop.ts';
 import { storage } from './runtime.ts';
 
 export interface HdrLevel {
@@ -121,15 +124,18 @@ export interface Hdr {
   readonly label: string;
   /** Next level (off after high), saved for every game, shown in a brief note. */
   cycle(): void;
-  /** Call right after the game draws its frame. */
+  /** Call right after the game draws its frame: paints the backdrop, and the HDR picture when on. */
   present(): void;
   destroy(): void;
 }
 
 interface Layer {
   src: HTMLCanvasElement;
+  /** The backdrop: the whole screen, always smooth. */
+  soft?: boolean;
   tex?: GPUTexture;
-  bind?: GPUBindGroup;
+  crisp?: GPUBindGroup;
+  smooth?: GPUBindGroup;
 }
 
 export function createHdr(sources: HTMLCanvasElement[], { enabled = true }: { enabled?: boolean } = {}): Hdr {
@@ -150,8 +156,13 @@ export function createHdr(sources: HTMLCanvasElement[], { enabled = true }: { en
     note: HTMLElement | null = null,
     noteTimer = 0,
     dead = false,
+    pixelArt: boolean | undefined,
     shown = false;
-  const layers: Layer[] = sources.map(src => ({ src }));
+  const backdrop = enabled && typeof document !== 'undefined' ? createBackdrop(sources) : null;
+  const layers: Layer[] = [
+    ...(backdrop ? [{ src: backdrop.canvas, soft: true }] : []),
+    ...sources.map(src => ({ src })),
+  ];
 
   const writeLevel = () => {
     const L = HDR_LEVELS[level];
@@ -165,7 +176,13 @@ export function createHdr(sources: HTMLCanvasElement[], { enabled = true }: { en
     if (dead) return d.destroy();
     out = document.createElement('canvas');
     out.setAttribute('aria-hidden', 'true');
-    Object.assign(out.style, { position: 'fixed', pointerEvents: 'none', display: 'none', margin: '0' });
+    Object.assign(out.style, {
+      position: 'fixed',
+      pointerEvents: 'none',
+      display: 'none',
+      margin: '0',
+      imageRendering: 'auto',
+    });
     layers[layers.length - 1].src.after(out);
     const c = out.getContext('webgpu');
     if (!c) return fail();
@@ -220,17 +237,25 @@ export function createHdr(sources: HTMLCanvasElement[], { enabled = true }: { en
 
   function render() {
     const d = device!,
-      first = layers[0].src,
-      r = first.getBoundingClientRect(),
-      W = first.width,
-      H = first.height;
-    if (!W || !H) return;
+      game = sources[0],
+      gr = game.getBoundingClientRect();
+    if (!game.width || !game.height || !gr.width || !gr.height) return;
+    // the whole screen with a backdrop to show, else the game's own rect
+    const full = !!backdrop?.active;
+    const R = full ? { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight } : gr;
+    // the game's pixel density; the screen's for a pixel-art game (its pixels stay crisp at any size)
+    let D = game.width / gr.width;
+    if ((pixelArt ??= /pixelated|crisp-edges/.test(getComputedStyle(game).imageRendering)))
+      D = Math.min(window.devicePixelRatio || 1, 2);
+    D = Math.min(D, 4096 / R.width, 4096 / R.height);
+    const W = Math.max(1, Math.round(R.width * D)),
+      H = Math.max(1, Math.round(R.height * D));
     const o = out!;
     if (o.width !== W || o.height !== H) {
       o.width = W;
       o.height = H;
     }
-    Object.assign(o.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    Object.assign(o.style, { left: `${R.left}px`, top: `${R.top}px`, width: `${R.width}px`, height: `${R.height}px` });
     const enc = d.createCommandEncoder();
     const pass = enc.beginRenderPass({
       colorAttachments: [
@@ -240,7 +265,14 @@ export function createHdr(sources: HTMLCanvasElement[], { enabled = true }: { en
     pass.setPipeline(pipeline!);
     for (const l of layers) {
       const { src } = l;
-      if (!src.width || !src.height) continue;
+      if (!src.width || !src.height || (l.soft && !full)) continue;
+      // each layer where it is on screen
+      const r = l.soft ? R : src.getBoundingClientRect(),
+        x = Math.max(0, Math.round((r.left - R.left) * D)),
+        y = Math.max(0, Math.round((r.top - R.top) * D)),
+        w = Math.min(W - x, Math.round(r.width * D)),
+        h = Math.min(H - y, Math.round(r.height * D));
+      if (w <= 0 || h <= 0) continue;
       if (!l.tex || l.tex.width !== src.width || l.tex.height !== src.height) {
         l.tex?.destroy();
         l.tex = d.createTexture({
@@ -248,22 +280,27 @@ export function createHdr(sources: HTMLCanvasElement[], { enabled = true }: { en
           format: 'rgba8unorm',
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
-        // pixel for pixel when the sizes match (the CGA games' crisp pixels); smooth otherwise
-        const sampler = src.width === W && src.height === H ? nearest! : smooth!;
-        l.bind = d.createBindGroup({
-          layout: pipeline!.getBindGroupLayout(0),
-          entries: [
-            { binding: 0, resource: l.tex.createView() },
-            { binding: 1, resource: sampler },
-            { binding: 2, resource: { buffer: uniforms! } },
-          ],
-        });
+        const bind = (sampler: GPUSampler) =>
+          d.createBindGroup({
+            layout: pipeline!.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: l.tex!.createView() },
+              { binding: 1, resource: sampler },
+              { binding: 2, resource: { buffer: uniforms! } },
+            ],
+          });
+        l.crisp = bind(nearest!);
+        l.smooth = bind(smooth!);
       }
       d.queue.copyExternalImageToTexture({ source: src }, { texture: l.tex, premultipliedAlpha: true }, [
         src.width,
         src.height,
       ]);
-      pass.setBindGroup(0, l.bind!);
+      // pixel for pixel, or a pixel-art game's crisp pixels shown large; smooth otherwise
+      const crisp =
+        !l.soft && ((Math.abs(w - src.width) <= 1 && Math.abs(h - src.height) <= 1) || w >= src.width * 1.9);
+      pass.setViewport(x, y, w, h, 0, 1);
+      pass.setBindGroup(0, crisp ? l.crisp! : l.smooth!);
       pass.draw(3);
     }
     pass.end();
@@ -317,6 +354,7 @@ export function createHdr(sources: HTMLCanvasElement[], { enabled = true }: { en
       flash(this.label);
     },
     present() {
+      backdrop?.paint();
       const on = !dead && !!device && level > 0 && !!hi?.matches;
       show(on);
       if (!on) return;
@@ -333,6 +371,7 @@ export function createHdr(sources: HTMLCanvasElement[], { enabled = true }: { en
       for (const l of layers) l.tex?.destroy();
       out?.remove();
       note?.remove();
+      backdrop?.destroy();
       uniforms?.destroy();
       device?.destroy();
       device = null;
