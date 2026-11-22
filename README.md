@@ -20,6 +20,7 @@ no external assets. `dist/index.html` is the launcher, a DOS-style menu with liv
 | `games/spindle`  | Spindle  | Nebulus (1987)                  | `dist/spindle.html`                                        |
 | `games/dropzone` | Dropzone | Airborne Ranger (1988)          | `dist/dropzone.html`                                       |
 | `games/contrail` | Contrail | F29 Retaliator (1989)           | `dist/contrail.html`                                       |
+| `games/netcord`  | Netcord  | 4D Sports Tennis (1990)         | `dist/netcord.html`                                        |
 | `games/treeline` | Treeline | LHX Attack Chopper (1990)       | `dist/treeline.html`                                       |
 | `games/barrage`  | Barrage  | Scorched Earth (1991)           | `dist/barrage.html`                                        |
 | `games/triform`  | Triform  | Metal Mutant (1991)             | `dist/triform-vga.html` (VGA), `dist/triform-hd.html` (HD) |

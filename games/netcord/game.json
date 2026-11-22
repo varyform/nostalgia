@@ -1,0 +1,58 @@
+{
+  "title": "Netcord",
+  "exe": "NETCORD.EXE",
+  "after": "4D Sports Tennis",
+  "year": 1990,
+  "genre": "Tennis",
+  "tags": ["Sports", "Tennis", "3D", "Career"],
+  "blurb": "Climb the Meridian Tour from wildcard to world No. 1 and win the Four Crowns: eight invented events on hard, clay, grass and carpet, a ball with real spin and flat-shaded players.",
+  "facts": [
+    ["Tour", "32 invented players, 8 events, rankings, prize money"],
+    ["Courts", "Hard, clay, grass and indoor carpet"],
+    ["Goal", "World No. 1 and the Four Crowns"],
+    ["Input", "Keyboard, gamepad, touch"]
+  ],
+  "input": {
+    "actions": {
+      "up": { "keys": ["ArrowUp", "KeyW"], "pad": ["Up", "LStickUp"] },
+      "down": { "keys": ["ArrowDown", "KeyS"], "pad": ["Down", "LStickDown"] },
+      "left": { "keys": ["ArrowLeft", "KeyA"], "pad": ["Left", "LStickLeft"] },
+      "right": { "keys": ["ArrowRight", "KeyD"], "pad": ["Right", "LStickRight"] },
+      "hit": { "keys": ["Space", "KeyX"], "pad": ["South"], "touch": "HIT" },
+      "slice": { "keys": ["KeyZ", "ShiftLeft"], "pad": ["West"], "touch": "SLICE" },
+      "camera": { "keys": ["KeyC"], "pad": ["North"], "touch": "CAM" },
+      "start": { "keys": ["Enter", "Space"], "pad": ["South", "Start"], "touch": "Tap" },
+      "pause": { "keys": ["KeyP", "Escape"], "pad": ["Start"], "touch": "II" },
+      "back": { "keys": ["Escape", "Backspace"], "pad": ["East"], "touch": "BACK" },
+      "quit": { "keys": ["KeyQ", "Escape"], "pad": ["East", "Select"] },
+      "sound": { "keys": ["KeyM"] },
+      "fullscreen": { "keys": ["KeyF"] },
+      "hdr": { "keys": ["KeyL"] }
+    },
+    "display": {
+      "move": { "keys": ["Arrows"], "pad": ["LStick"], "touch": "Stick" },
+      "aim": { "keys": ["Arrows"], "pad": ["LStick"], "touch": "Stick" },
+      "menu": { "keys": ["Arrows"], "pad": ["Dpad"] },
+      "change": { "keys": ["ArrowsH"], "pad": ["DpadH"] },
+      "tabs": { "keys": ["ArrowsH"], "pad": ["DpadH"] },
+      "letters": { "keys": ["Arrows"], "pad": ["Dpad"] }
+    }
+  },
+  "controls": [
+    ["move", "Run (assist runs for you)"],
+    ["hit", "Drive: early cross-court, late down the line"],
+    ["slice", "Slice; up: lob, down: drop shot"],
+    ["aim", "Hold as you swing to aim"],
+    ["camera", "Camera"],
+    ["pause", "Pause"]
+  ],
+  "versions": [
+    {
+      "key": "hd",
+      "label": "HD",
+      "entry": "index.html",
+      "tag": "HD · 16:9 · 3D",
+      "note": "Flat-shaded polygon players on lit hard, clay, grass and carpet courts, framed by packed stands; five cameras and a TV scoreboard. The tour is saved in the browser."
+    }
+  ]
+}
