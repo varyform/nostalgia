@@ -111,6 +111,10 @@ the mechanics. `game.json` credits the original in `after` + `year`.
   `README.md` or `dist/index.html` unless that's the task — report needed package changes instead.
 - While others run: no `mise run ci` and no full `mise run build`; use `check`, `test` and `build <pages>`, ignoring
   other agents' folders. No commits from agents.
+- A new game is built in its own worktree and branch (`git worktree add ../nostalgia-<id> -b <id>`, then
+  `mise install` and `pnpm install` there), so a half-built game stays out of the main tree's launcher, builds and
+  commits; its agents work only in that worktree. Merge it to main when the game is done and asked for; package
+  changes it needs land on main first and are merged into the branch.
 
 ## Commits and deploy
 
