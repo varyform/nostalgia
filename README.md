@@ -202,7 +202,7 @@ same canvas. `@nostalgia/gl/ui` is the 2D HUD helper over the GL canvas. The API
 
 ## Rig moves: `@nostalgia/rig`
 
-Moves made in the [rig editor](https://github.com/varyform/rig-editor) (a 3D stick-figure rig, keyframed, with IK):
+Moves made in the rig editor (a 3D stick-figure rig, keyframed, with IK):
 its runtime, copied from the editor's `src/rig/` by `mise run rig-sync` and never edited here, so the editor stays
 where it's made and tested. Plain TypeScript with no imports; deterministic maths (`Exact`), so replays agree.
 

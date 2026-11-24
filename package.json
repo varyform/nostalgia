@@ -1,6 +1,7 @@
 {
   "name": "nostalgia",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "dependencies": {
     "@nostalgia/audio": "workspace:*",
